@@ -70,6 +70,25 @@ def get_prompts(
     return prompts
 
 
+@router.get("/history", response_model=List[Prompt])
+def get_prompt_history(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get user's prompt history sorted by most recent"""
+    prompts = (
+        db.query(PromptModel)
+        .filter(PromptModel.owner_id == current_user.id)
+        .order_by(PromptModel.updated_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return prompts
+
+
 @router.get("/{prompt_id}", response_model=Prompt)
 def get_prompt(
     prompt_id: int,

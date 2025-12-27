@@ -35,10 +35,7 @@ def login(
 
 @router.get("/me", response_model=User)
 def get_current_user_info(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(lambda: None)
+    current_user: User = Depends(get_current_active_user)
 ):
     """Get current user information"""
-    from app.api.dependencies import get_current_active_user
-    current_user = get_current_active_user(db)
     return current_user
