@@ -9,6 +9,7 @@
 2. Database fixture only supported SQLite, not PostgreSQL used in CI
 3. Potential dependency conflicts from unused test packages
 4. **GitHub Actions using deprecated artifact upload (v3)** - Critical infrastructure issue
+5. **CORS_ORIGINS parsing error** - pydantic-settings v2 requires JSON array format
 
 ---
 
@@ -158,6 +159,58 @@ coverage[toml]>=7.2.7
 
 ---
 
+### Fix 5: CORS_ORIGINS Parsing Error ✅
+
+**Files**: `backend/app/core/config.py`, `backend/tests/conftest.py`, `backend/.env.example`
+
+**Problem**: Pydantic-settings v2 requires JSON array format for List[str] fields from environment variables. Tests were failing with `exit code 4` due to parsing error.
+
+**Error Message**:
+```
+pydantic_settings.sources.SettingsError: error parsing value for field "CORS_ORIGINS" from source "DotEnvSettingsSource"
+```
+
+**Root Cause**:
+- `CORS_ORIGINS` is defined as `List[str]` in Settings model
+- Pydantic-settings v2 expects JSON format: `["url1","url2"]`
+- conftest.py was setting `CORS_ORIGINS="http://localhost:5173"` (plain string)
+- .env file had comma-separated format: `http://localhost:5173,http://localhost:3000`
+
+**Changes Made**:
+
+1. **conftest.py**: Removed `CORS_ORIGINS` environment variable (uses default from config.py)
+```python
+# Removed this line:
+# os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
+
+# CORS_ORIGINS now uses default value from config.py
+```
+
+2. **config.py**: Added clarifying comment
+```python
+# CORS
+# Note: In .env file, CORS_ORIGINS must be a JSON array: ["url1","url2"]
+CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+```
+
+3. **.env.example**: Updated to JSON array format with documentation
+```bash
+# Before:
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# After:
+CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+# Note: Must be a valid JSON array. Use double quotes, not single quotes.
+```
+
+**Impact**:
+- ✅ Tests can now import app modules without parsing errors
+- ✅ Settings class loads successfully in both local and CI environments
+- ✅ Clear documentation for JSON array format requirement
+- ✅ Fixes pytest exit code 4 error
+
+---
+
 ## GitHub Actions Configuration
 
 The workflow is configured to use PostgreSQL matching our fixes:
@@ -266,10 +319,13 @@ Refer to `TESTING_CI_DEBUG.md` for detailed troubleshooting steps.
 
 | File | Changes | Purpose |
 |------|---------|---------|
-| `backend/tests/conftest.py` | Environment variables, database fixture | Support both SQLite and PostgreSQL |
+| `backend/tests/conftest.py` | Environment variables, database fixture, removed CORS_ORIGINS | Support both SQLite and PostgreSQL, fix parsing |
+| `backend/app/core/config.py` | Added CORS_ORIGINS comment | Clarify JSON format requirement |
+| `backend/.env.example` | Updated CORS_ORIGINS format | JSON array format with documentation |
 | `backend/requirements-test.txt` | Removed 8 dependencies | Simplify, reduce conflicts |
 | `.github/workflows/test.yml` | Updated Actions v3→v4/v5 | Fix deprecated artifact upload |
 | `TESTING_CI_DEBUG.md` | New file (400+ lines) | Troubleshooting guide |
+| `GITHUB_ACTIONS_STATUS.md` | New file | CI run timeline clarification |
 | `CI_FIX_SUMMARY.md` | This file | Document fixes |
 
 ---
@@ -280,6 +336,9 @@ Refer to `TESTING_CI_DEBUG.md` for detailed troubleshooting steps.
 1. `76ffadf` - Fix CI/CD test failures - environment and database configuration
 2. `d2438d4` - Add CI/CD fix summary documentation
 3. `cc2e13c` - Update GitHub Actions to latest versions (v4/v5)
+4. `876bd15` - Update CI fix summary with GitHub Actions deprecation fix
+5. `a56e84c` - Add GitHub Actions status timeline and clarification document
+6. `dda5afe` - Fix CORS_ORIGINS parsing issue for pydantic-settings v2
 
 **Branch**: `claude/build-promptforge-hFmVH`
 **Status**: ✅ All fixes pushed to remote
