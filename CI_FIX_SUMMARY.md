@@ -10,6 +10,7 @@
 3. Potential dependency conflicts from unused test packages
 4. **GitHub Actions using deprecated artifact upload (v3)** - Critical infrastructure issue
 5. **CORS_ORIGINS parsing error** - pydantic-settings v2 requires JSON array format
+6. **Missing import in auth.py** - NameError for get_current_active_user (CRITICAL)
 
 ---
 
