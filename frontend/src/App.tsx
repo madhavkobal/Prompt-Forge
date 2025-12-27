@@ -6,7 +6,7 @@ import { authService } from '@/services/authService';
 
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
-import Analyzer from '@/pages/Analyzer';
+import AnalyzerEnhanced from '@/pages/AnalyzerEnhanced';
 import Prompts from '@/pages/Prompts';
 import Templates from '@/pages/Templates';
 
@@ -45,7 +45,7 @@ function App() {
             path="/analyzer"
             element={
               <ProtectedRoute>
-                <Analyzer />
+                <AnalyzerEnhanced />
               </ProtectedRoute>
             }
           />
