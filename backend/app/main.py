@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api import auth, prompts, templates
+from app.api import auth, prompts, templates, analysis
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Authentication"])
 app.include_router(prompts.router, prefix=f"{settings.API_V1_STR}/prompts", tags=["Prompts"])
 app.include_router(templates.router, prefix=f"{settings.API_V1_STR}/templates", tags=["Templates"])
+app.include_router(analysis.router, prefix=f"{settings.API_V1_STR}/analysis", tags=["Advanced Analysis"])
 
 
 @app.get("/")
