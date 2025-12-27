@@ -61,7 +61,7 @@ build/
 # Testing
 .coverage
 coverage.xml
-coverage-summary.json
+coverage.json
 htmlcov/
 .pytest_cache/
 coverage/

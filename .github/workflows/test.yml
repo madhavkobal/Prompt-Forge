@@ -80,20 +80,19 @@ jobs:
       if: always()
       run: |
         cd backend
-        if [ -f coverage-summary.json ]; then
+        if [ -f coverage.json ]; then
           echo "## Backend Test Coverage (Python ${{ matrix.python-version }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           python -c "
           import json
-          with open('coverage-summary.json') as f:
+          with open('coverage.json') as f:
               data = json.load(f)
-              total = data['total']
+              totals = data['totals']
               print('| Metric | Coverage |')
               print('|--------|----------|')
-              print(f\"| Lines | {total['lines']['percent']:.2f}% |\")
-              print(f\"| Statements | {total['statements']['percent']:.2f}% |\")
-              print(f\"| Functions | {total['functions']['percent']:.2f}% |\")
-              print(f\"| Branches | {total['branches']['percent']:.2f}% |\")
+              print(f\"| Statements | {totals['percent_covered']:.2f}% |\")
+              print(f\"| Covered Lines | {totals['covered_lines']} / {totals['num_statements']} |\")
+              print(f\"| Missing Lines | {totals['missing_lines']} |\")
           " >> $GITHUB_STEP_SUMMARY
         fi
 
@@ -105,5 +104,5 @@ jobs:
         path: |
           backend/htmlcov/
           backend/coverage.xml
-          backend/coverage-summary.json
+          backend/coverage.json
         retention-days: 30
