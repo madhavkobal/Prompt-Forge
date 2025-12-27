@@ -1,12 +1,19 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import Base
 from app.api import auth, prompts, templates, analysis
 
-# Note: Database tables should be created using Alembic migrations
-# For development, tables are created by test fixtures or manually
-# Base.metadata.create_all(bind=engine) - Removed to prevent import-time DB connection
+# Create database tables for non-test environments
+# Test fixtures handle table creation during tests
+if os.environ.get("ENVIRONMENT") != "testing":
+    try:
+        from app.core.database import engine
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        # Fail gracefully if database is not yet configured
+        pass
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
