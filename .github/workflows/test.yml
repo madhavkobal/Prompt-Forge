@@ -3,8 +3,13 @@ name: Backend Tests
 on:
   push:
     branches: [ main, develop, claude/** ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test.yml'
   pull_request:
     branches: [ main, develop ]
+    paths:
+      - 'backend/**'
 
 jobs:
   test:
@@ -69,10 +74,36 @@ jobs:
         flags: backend
         name: backend-${{ matrix.python-version }}
         fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Generate coverage summary
+      if: always()
+      run: |
+        cd backend
+        if [ -f coverage-summary.json ]; then
+          echo "## Backend Test Coverage (Python ${{ matrix.python-version }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          python -c "
+          import json
+          with open('coverage-summary.json') as f:
+              data = json.load(f)
+              total = data['total']
+              print('| Metric | Coverage |')
+              print('|--------|----------|')
+              print(f\"| Lines | {total['lines']['percent']:.2f}% |\")
+              print(f\"| Statements | {total['statements']['percent']:.2f}% |\")
+              print(f\"| Functions | {total['functions']['percent']:.2f}% |\")
+              print(f\"| Branches | {total['branches']['percent']:.2f}% |\")
+          " >> $GITHUB_STEP_SUMMARY
+        fi
 
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: test-results-${{ matrix.python-version }}
-        path: backend/htmlcov/
+        name: test-results-python-${{ matrix.python-version }}
+        path: |
+          backend/htmlcov/
+          backend/coverage.xml
+          backend/coverage-summary.json
+        retention-days: 30

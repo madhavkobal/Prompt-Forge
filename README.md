@@ -10,6 +10,12 @@ PromptForge helps you analyze, enhance, and optimize your AI prompts using Googl
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
 ![React](https://img.shields.io/badge/React-18+-blue.svg)
 
+[![Backend Tests](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/test.yml/badge.svg)](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/test.yml)
+[![Frontend Tests](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/frontend-test.yml/badge.svg)](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/frontend-test.yml)
+[![codecov](https://codecov.io/gh/madhavkobal/Prompt-Forge/branch/main/graph/badge.svg)](https://codecov.io/gh/madhavkobal/Prompt-Forge)
+[![Backend Coverage](https://img.shields.io/badge/Backend%20Coverage-63%25-yellow.svg)](https://github.com/madhavkobal/Prompt-Forge)
+[![Frontend Coverage](https://img.shields.io/badge/Frontend%20Coverage-TBD-lightgrey.svg)](https://github.com/madhavkobal/Prompt-Forge)
+
 ---
 
 ## 🚀 Features

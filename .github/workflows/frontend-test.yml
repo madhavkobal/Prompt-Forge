@@ -1,0 +1,89 @@
+name: Frontend Tests
+
+on:
+  push:
+    branches: [ main, develop, claude/** ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-test.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Type check
+      run: |
+        cd frontend
+        npm run type-check
+
+    - name: Run tests with coverage
+      run: |
+        cd frontend
+        npm run test:coverage
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./frontend/coverage/lcov.info
+        flags: frontend
+        name: frontend-${{ matrix.node-version }}
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Generate coverage summary
+      if: always()
+      run: |
+        cd frontend
+        if [ -f coverage/coverage-summary.json ]; then
+          echo "## Frontend Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          node -e "
+            const summary = require('./coverage/coverage-summary.json');
+            const total = summary.total;
+            console.log('| Metric | Coverage |');
+            console.log('|--------|----------|');
+            console.log('| Lines | ' + total.lines.pct + '% |');
+            console.log('| Statements | ' + total.statements.pct + '% |');
+            console.log('| Functions | ' + total.functions.pct + '% |');
+            console.log('| Branches | ' + total.branches.pct + '% |');
+          " >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Archive coverage results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report-node-${{ matrix.node-version }}
+        path: frontend/coverage/
+        retention-days: 30
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: romeovs/lcov-reporter-action@v0.3.1
+      with:
+        lcov-file: ./frontend/coverage/lcov.info
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        delete-old-comments: true
