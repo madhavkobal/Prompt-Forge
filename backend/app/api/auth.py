@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.schemas.user import UserCreate, User, Token
 from app.services.auth_service import AuthService
+from app.api.dependencies import get_current_active_user
 
 router = APIRouter()
 
