@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     # CORS
+    # Note: In .env file, CORS_ORIGINS must be a JSON array: ["url1","url2"]
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     # Google Gemini

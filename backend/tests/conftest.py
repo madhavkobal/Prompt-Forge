@@ -21,7 +21,7 @@ os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only-not-secure")
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-api-key")
-os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
+# CORS_ORIGINS has a default value in config.py, no need to set it here
 
 from app.main import app
 from app.core.database import Base, get_db
