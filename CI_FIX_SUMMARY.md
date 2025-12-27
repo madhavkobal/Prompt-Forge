@@ -8,6 +8,7 @@
 1. Environment variable conflicts between local test configuration and CI
 2. Database fixture only supported SQLite, not PostgreSQL used in CI
 3. Potential dependency conflicts from unused test packages
+4. **GitHub Actions using deprecated artifact upload (v3)** - Critical infrastructure issue
 
 ---
 
@@ -131,6 +132,32 @@ coverage[toml]>=7.2.7
 
 ---
 
+### Fix 4: Updated GitHub Actions Versions ✅
+
+**File**: `.github/workflows/test.yml`
+
+**Problem**: GitHub deprecated `actions/upload-artifact@v3` on April 16, 2024. Workflow runs were failing with "This request has been automatically failed because it uses a deprecated version."
+
+**Changes Made**:
+```yaml
+# Updated Actions versions:
+- actions/checkout@v3 → @v4
+- actions/setup-python@v4 → @v5
+- actions/cache@v3 → @v4
+- codecov/codecov-action@v3 → @v4
+- actions/upload-artifact@v3 → @v4  # Critical fix
+```
+
+**Impact**:
+- ✅ Workflow can now upload artifacts successfully
+- ✅ Uses latest stable versions of all GitHub Actions
+- ✅ Future-proofed against deprecation notices
+- ✅ Improved security and performance
+
+**Reference**: https://github.blog/changelog/2024-04-16-deprecation-notice-v3-of-the-artifact-actions/
+
+---
+
 ## GitHub Actions Configuration
 
 The workflow is configured to use PostgreSQL matching our fixes:
@@ -241,6 +268,7 @@ Refer to `TESTING_CI_DEBUG.md` for detailed troubleshooting steps.
 |------|---------|---------|
 | `backend/tests/conftest.py` | Environment variables, database fixture | Support both SQLite and PostgreSQL |
 | `backend/requirements-test.txt` | Removed 8 dependencies | Simplify, reduce conflicts |
+| `.github/workflows/test.yml` | Updated Actions v3→v4/v5 | Fix deprecated artifact upload |
 | `TESTING_CI_DEBUG.md` | New file (400+ lines) | Troubleshooting guide |
 | `CI_FIX_SUMMARY.md` | This file | Document fixes |
 
@@ -248,11 +276,14 @@ Refer to `TESTING_CI_DEBUG.md` for detailed troubleshooting steps.
 
 ## Commit Details
 
-**Commit**: `76ffadf`
-**Message**: Fix CI/CD test failures - environment and database configuration
+**Primary Commits**:
+1. `76ffadf` - Fix CI/CD test failures - environment and database configuration
+2. `d2438d4` - Add CI/CD fix summary documentation
+3. `cc2e13c` - Update GitHub Actions to latest versions (v4/v5)
+
 **Branch**: `claude/build-promptforge-hFmVH`
-**Status**: ✅ Pushed to remote
-**CI Status**: 🔄 Running...
+**Status**: ✅ All fixes pushed to remote
+**CI Status**: 🔄 Running with updated workflow...
 
 ---
 
