@@ -16,11 +16,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
-# Set test environment
-os.environ["ENVIRONMENT"] = "testing"
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only-not-secure"
-os.environ["GEMINI_API_KEY"] = "test-gemini-api-key"
+# Set test environment (only if not already set by CI/CD)
+os.environ.setdefault("ENVIRONMENT", "testing")
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only-not-secure")
+os.environ.setdefault("GEMINI_API_KEY", "test-gemini-api-key")
+os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
 
 from app.main import app
 from app.core.database import Base, get_db
@@ -39,14 +40,21 @@ from app.services.auth_service import AuthService
 def test_db() -> Generator[Session, None, None]:
     """
     Create a test database for each test function.
-    Uses SQLite in-memory database for speed.
+    Uses DATABASE_URL from environment (SQLite for local, PostgreSQL for CI).
     """
+    # Get database URL from environment
+    database_url = os.environ.get("DATABASE_URL", "sqlite:///:memory:")
+
     # Create test database engine
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    if database_url.startswith("sqlite"):
+        engine = create_engine(
+            database_url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+    else:
+        # PostgreSQL or other databases
+        engine = create_engine(database_url)
 
     # Create all tables
     Base.metadata.create_all(bind=engine)
@@ -59,7 +67,10 @@ def test_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+        # Clean up tables after each test
+        db.rollback()
         Base.metadata.drop_all(bind=engine)
+        engine.dispose()
 
 
 @pytest.fixture(scope="function")
