@@ -7,6 +7,7 @@ import React, { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { vi, beforeAll, afterAll } from 'vitest';
 
 // Create a custom render function that includes providers
 const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
@@ -44,6 +45,7 @@ export const createMockUser = (overrides = {}) => ({
   username: 'testuser',
   full_name: 'Test User',
   is_active: true,
+  is_superuser: false,
   created_at: '2024-01-15T10:00:00',
   ...overrides,
 });

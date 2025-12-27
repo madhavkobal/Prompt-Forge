@@ -21,6 +21,15 @@ import {
 vi.mock('axios');
 const mockedAxios = vi.mocked(axios, true);
 
+// Mock axios.create to return an axios instance with interceptors
+mockedAxios.create = vi.fn(() => ({
+  ...mockedAxios,
+  interceptors: {
+    request: { use: vi.fn(), eject: vi.fn() },
+    response: { use: vi.fn(), eject: vi.fn() },
+  },
+})) as any;
+
 describe('Auth Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -85,18 +94,18 @@ describe('Auth Service', () => {
 
     it('sends credentials as FormData', async () => {
       const mockResponse = createMockAuthResponse();
-      let capturedFormData: FormData | null = null;
+      let capturedFormData: any = null;
 
-      mockedAxios.post.mockImplementation(async (url, data) => {
-        capturedFormData = data as FormData;
+      mockedAxios.post.mockImplementation(async (_url, data) => {
+        capturedFormData = data;
         return { data: mockResponse };
       });
 
       await authService.login('testuser', 'password123');
 
       expect(capturedFormData).toBeInstanceOf(FormData);
-      expect(capturedFormData?.get('username')).toBe('testuser');
-      expect(capturedFormData?.get('password')).toBe('password123');
+      expect(capturedFormData.get('username')).toBe('testuser');
+      expect(capturedFormData.get('password')).toBe('password123');
     });
   });
 

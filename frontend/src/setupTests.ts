@@ -28,7 +28,7 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock IntersectionObserver
-global.IntersectionObserver = class IntersectionObserver {
+globalThis.IntersectionObserver = class IntersectionObserver {
   constructor() {}
   disconnect() {}
   observe() {}
@@ -39,7 +39,7 @@ global.IntersectionObserver = class IntersectionObserver {
 } as any;
 
 // Mock ResizeObserver
-global.ResizeObserver = class ResizeObserver {
+globalThis.ResizeObserver = class ResizeObserver {
   constructor() {}
   disconnect() {}
   observe() {}
@@ -55,7 +55,7 @@ const localStorageMock = {
   length: 0,
   key: vi.fn(),
 };
-global.localStorage = localStorageMock as any;
+globalThis.localStorage = localStorageMock as any;
 
 // Mock sessionStorage
 const sessionStorageMock = {
@@ -66,17 +66,14 @@ const sessionStorageMock = {
   length: 0,
   key: vi.fn(),
 };
-global.sessionStorage = sessionStorageMock as any;
+globalThis.sessionStorage = sessionStorageMock as any;
 
 // Mock window.scrollTo
-window.scrollTo = vi.fn();
+window.scrollTo = vi.fn() as any;
 
 // Mock console methods to reduce noise in tests
-global.console = {
+globalThis.console = {
   ...console,
   error: vi.fn(),
   warn: vi.fn(),
 };
-
-// Set up environment variables for tests
-process.env.VITE_API_URL = 'http://localhost:8000';

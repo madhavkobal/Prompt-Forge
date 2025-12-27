@@ -12,7 +12,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   Cell,
 } from 'recharts';
 import { CheckCircle, XCircle, AlertCircle } from 'lucide-react';
@@ -42,12 +41,6 @@ export default function AnalysisPanel({ analysis }: AnalysisPanelProps) {
     if (score >= 80) return 'text-green-600';
     if (score >= 60) return 'text-yellow-600';
     return 'text-red-600';
-  };
-
-  const getScoreBg = (score: number) => {
-    if (score >= 80) return 'bg-green-100';
-    if (score >= 60) return 'bg-yellow-100';
-    return 'bg-red-100';
   };
 
   return (

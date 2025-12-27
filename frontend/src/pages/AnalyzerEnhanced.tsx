@@ -8,7 +8,7 @@ import AnalysisPanel from '@/components/AnalysisPanel';
 import EnhancementPanel from '@/components/EnhancementPanel';
 import ComparisonView from '@/components/ComparisonView';
 import { useDebounce } from '@/hooks/useDebounce';
-import { Sparkles, TrendingUp, ArrowLeftRight, Loader, Save } from 'lucide-react';
+import { Sparkles, TrendingUp, Loader, Save } from 'lucide-react';
 
 const LLM_OPTIONS: LLMType[] = ['ChatGPT', 'Claude', 'Gemini', 'Grok', 'DeepSeek'];
 

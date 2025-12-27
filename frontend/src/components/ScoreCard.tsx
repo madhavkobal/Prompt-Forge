@@ -1,4 +1,4 @@
-import { getScoreColor, getScoreBadge } from '@/utils/helpers';
+import { getScoreBadge } from '@/utils/helpers';
 
 interface ScoreCardProps {
   title: string;

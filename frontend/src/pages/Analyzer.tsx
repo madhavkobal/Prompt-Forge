@@ -4,7 +4,7 @@ import { PromptAnalysis, PromptEnhancement, LLMType } from '@/types';
 import toast from 'react-hot-toast';
 import Layout from '@/components/Layout';
 import ScoreCard from '@/components/ScoreCard';
-import { Sparkles, TrendingUp, ArrowRight, Save } from 'lucide-react';
+import { Sparkles, TrendingUp, ArrowRight } from 'lucide-react';
 
 const LLM_OPTIONS: LLMType[] = ['ChatGPT', 'Claude', 'Gemini', 'Grok', 'DeepSeek'];
 

@@ -9,7 +9,7 @@ import { Plus, Copy, Trash2 } from 'lucide-react';
 export default function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     loadTemplates();
