@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd frontend
-        npm ci
+        npm install
 
     - name: Type check
       run: |
@@ -68,6 +68,10 @@ jobs:
             console.log('| Functions | ' + total.functions.pct + '% |');
             console.log('| Branches | ' + total.branches.pct + '% |');
           " >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## Frontend Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage report not generated (tests may not have run with coverage)" >> $GITHUB_STEP_SUMMARY
         fi
 
     - name: Archive coverage results
