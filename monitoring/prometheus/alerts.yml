@@ -1,0 +1,376 @@
+################################################################################
+# Prometheus Alert Rules for PromptForge
+################################################################################
+
+groups:
+  #-----------------------------------------------------------------------------
+  # System Alerts
+  #-----------------------------------------------------------------------------
+  - name: system
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% (current value: {{ $value }}%)"
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 95% (current value: {{ $value }}%)"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% (current value: {{ $value }}%)"
+
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 95% (current value: {{ $value }}%)"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space is below 15% (current value: {{ $value }}%)"
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical disk space on {{ $labels.instance }}"
+          description: "Disk space is below 10% (current value: {{ $value }}%)"
+
+      - alert: HighDiskIOWait
+        expr: irate(node_cpu_seconds_total{mode="iowait"}[5m]) * 100 > 20
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High disk I/O wait on {{ $labels.instance }}"
+          description: "Disk I/O wait is above 20% (current value: {{ $value }}%)"
+
+  #-----------------------------------------------------------------------------
+  # Container Alerts
+  #-----------------------------------------------------------------------------
+  - name: containers
+    interval: 30s
+    rules:
+      - alert: ContainerDown
+        expr: up{job=~"backend|frontend|postgres|redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: container
+        annotations:
+          summary: "Container {{ $labels.instance }} is down"
+          description: "{{ $labels.job }} container has been down for more than 1 minute"
+
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: container
+        annotations:
+          summary: "High memory usage in container {{ $labels.name }}"
+          description: "Container memory usage is above 90% (current value: {{ $value }}%)"
+
+      - alert: ContainerHighCPU
+        expr: (rate(container_cpu_usage_seconds_total[5m]) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: container
+        annotations:
+          summary: "High CPU usage in container {{ $labels.name }}"
+          description: "Container CPU usage is above 80% (current value: {{ $value }}%)"
+
+      - alert: ContainerRestarting
+        expr: rate(container_last_seen{name!=""}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: container
+        annotations:
+          summary: "Container {{ $labels.name }} is restarting frequently"
+          description: "Container has restarted in the last 5 minutes"
+
+  #-----------------------------------------------------------------------------
+  # Database Alerts
+  #-----------------------------------------------------------------------------
+  - name: database
+    interval: 30s
+    rules:
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL instance {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: PostgreSQLTooManyConnections
+        expr: sum by (instance) (pg_stat_activity_count) > (pg_settings_max_connections * 0.8)
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL has too many connections"
+          description: "PostgreSQL instance {{ $labels.instance }} has {{ $value }} connections (>80% of max)"
+
+      - alert: PostgreSQLReplicationLag
+        expr: pg_replication_lag > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL replication lag is high"
+          description: "Replication lag is {{ $value }} seconds"
+
+      - alert: PostgreSQLDeadlocks
+        expr: rate(pg_stat_database_deadlocks[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL has deadlocks"
+          description: "Deadlocks detected in database {{ $labels.datname }}"
+
+      - alert: PostgreSQLSlowQueries
+        expr: pg_stat_activity_max_tx_duration > 300
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL has slow queries"
+          description: "Long-running query detected (>5 minutes)"
+
+  #-----------------------------------------------------------------------------
+  # Redis Alerts
+  #-----------------------------------------------------------------------------
+  - name: redis
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: RedisHighMemoryUsage
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is above 90% (current value: {{ $value }}%)"
+
+      - alert: RedisRejectedConnections
+        expr: rate(redis_rejected_connections_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis is rejecting connections"
+          description: "Redis has rejected {{ $value }} connections in the last 5 minutes"
+
+      - alert: RedisSlowCommands
+        expr: redis_slowlog_length > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis has slow commands"
+          description: "Redis slowlog has {{ $value }} entries"
+
+      - alert: RedisMissingMaster
+        expr: count(redis_instance_info{role="master"}) == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "Redis has no master"
+          description: "No Redis master instance found"
+
+  #-----------------------------------------------------------------------------
+  # HTTP Endpoint Alerts
+  #-----------------------------------------------------------------------------
+  - name: http_endpoints
+    interval: 30s
+    rules:
+      - alert: HTTPEndpointDown
+        expr: probe_success{job="blackbox-http"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: endpoint
+        annotations:
+          summary: "HTTP endpoint {{ $labels.instance }} is down"
+          description: "Endpoint has been down for more than 2 minutes"
+
+      - alert: HTTPEndpointSlow
+        expr: probe_http_duration_seconds{job="blackbox-http"} > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: endpoint
+        annotations:
+          summary: "HTTP endpoint {{ $labels.instance }} is slow"
+          description: "Endpoint response time is {{ $value }}s (>5s)"
+
+      - alert: HTTPEndpointStatusCode
+        expr: probe_http_status_code{job="blackbox-http"} >= 400
+        for: 2m
+        labels:
+          severity: warning
+          component: endpoint
+        annotations:
+          summary: "HTTP endpoint {{ $labels.instance }} returned error"
+          description: "Endpoint returned status code {{ $value }}"
+
+      - alert: SSLCertificateExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+          component: ssl
+        annotations:
+          summary: "SSL certificate expiring soon for {{ $labels.instance }}"
+          description: "SSL certificate expires in {{ $value }} days"
+
+      - alert: SSLCertificateExpired
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 0
+        for: 1m
+        labels:
+          severity: critical
+          component: ssl
+        annotations:
+          summary: "SSL certificate expired for {{ $labels.instance }}"
+          description: "SSL certificate has expired"
+
+  #-----------------------------------------------------------------------------
+  # Application Alerts
+  #-----------------------------------------------------------------------------
+  - name: application
+    interval: 30s
+    rules:
+      - alert: BackendHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "High error rate in backend"
+          description: "Backend error rate is {{ $value }} req/s"
+
+      - alert: BackendHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "High latency in backend"
+          description: "95th percentile latency is {{ $value }}s (>1s)"
+
+  #-----------------------------------------------------------------------------
+  # Monitoring Stack Alerts
+  #-----------------------------------------------------------------------------
+  - name: monitoring
+    interval: 60s
+    rules:
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus has been down for more than 5 minutes"
+
+      - alert: AlertManagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "AlertManager is down"
+          description: "AlertManager has been down for more than 5 minutes"
+
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana has been down for more than 5 minutes"
+
+      - alert: PrometheusTSDBReloadsFailing
+        expr: increase(prometheus_tsdb_reloads_failures_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Prometheus TSDB reloads are failing"
+          description: "{{ $value }} TSDB reload failures in the last 5 minutes"
+
+      - alert: PrometheusNotConnectedToAlertmanager
+        expr: prometheus_notifications_alertmanagers_discovered < 1
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Prometheus cannot connect to AlertManager"
+          description: "Prometheus has discovered {{ $value }} AlertManagers"

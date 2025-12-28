@@ -1,0 +1,348 @@
+################################################################################
+# PromptForge Monitoring Stack - Docker Compose Configuration
+################################################################################
+#
+# Complete monitoring solution with:
+#   - Loki + Promtail for centralized logging
+#   - Prometheus for metrics collection
+#   - Grafana for visualization
+#   - Exporters for system, database, and application metrics
+#   - AlertManager for alerting and notifications
+#
+# Usage:
+#   docker-compose -f docker-compose.monitoring.yml up -d
+#
+# Access:
+#   Grafana:     http://localhost:3000 (admin/admin)
+#   Prometheus:  http://localhost:9090
+#   AlertManager: http://localhost:9093
+#   Loki:        http://localhost:3100
+#
+################################################################################
+
+version: '3.8'
+
+services:
+  #-----------------------------------------------------------------------------
+  # Grafana - Visualization and Dashboards
+  #-----------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: promptforge-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  #-----------------------------------------------------------------------------
+  # Prometheus - Metrics Collection
+  #-----------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: promptforge-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  #-----------------------------------------------------------------------------
+  # AlertManager - Alert Routing and Notifications
+  #-----------------------------------------------------------------------------
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: promptforge-alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  #-----------------------------------------------------------------------------
+  # Loki - Log Aggregation
+  #-----------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:latest
+    container_name: promptforge-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  #-----------------------------------------------------------------------------
+  # Promtail - Log Shipper
+  #-----------------------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promptforge-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./monitoring/loki/promtail-config.yml:/etc/promtail/config.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+      - ./logs:/logs:ro
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  #-----------------------------------------------------------------------------
+  # Node Exporter - System Metrics
+  #-----------------------------------------------------------------------------
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: promptforge-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  #-----------------------------------------------------------------------------
+  # cAdvisor - Container Metrics
+  #-----------------------------------------------------------------------------
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: promptforge-cadvisor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - monitoring
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  #-----------------------------------------------------------------------------
+  # PostgreSQL Exporter - Database Metrics
+  #-----------------------------------------------------------------------------
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: promptforge-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD}@postgres-primary:5432/${POSTGRES_DB:-promptforge_prod}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  #-----------------------------------------------------------------------------
+  # Redis Exporter - Cache Metrics
+  #-----------------------------------------------------------------------------
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: promptforge-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis-master:6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+    ports:
+      - "9121:9121"
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  #-----------------------------------------------------------------------------
+  # Nginx Exporter - Web Server Metrics
+  #-----------------------------------------------------------------------------
+  nginx_exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: promptforge-nginx-exporter
+    restart: unless-stopped
+    command:
+      - '-nginx.scrape-uri=http://nginx:8080/nginx_status'
+    ports:
+      - "9113:9113"
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+
+  #-----------------------------------------------------------------------------
+  # Blackbox Exporter - Endpoint Monitoring
+  #-----------------------------------------------------------------------------
+  blackbox_exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: promptforge-blackbox-exporter
+    restart: unless-stopped
+    command:
+      - '--config.file=/config/blackbox.yml'
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./monitoring/prometheus/blackbox.yml:/config/blackbox.yml
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+
+#-----------------------------------------------------------------------------
+# Networks
+#-----------------------------------------------------------------------------
+networks:
+  monitoring:
+    driver: bridge
+    name: promptforge_monitoring
+
+#-----------------------------------------------------------------------------
+# Volumes
+#-----------------------------------------------------------------------------
+volumes:
+  grafana_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+  loki_data:
+    driver: local
+
+################################################################################
+# Monitoring Stack Notes
+################################################################################
+#
+# Components:
+#   - Grafana: Visualization (port 3000)
+#   - Prometheus: Metrics collection (port 9090)
+#   - AlertManager: Alert routing (port 9093)
+#   - Loki: Log aggregation (port 3100)
+#   - Promtail: Log shipping
+#   - Node Exporter: System metrics (port 9100)
+#   - cAdvisor: Container metrics (port 8080)
+#   - PostgreSQL Exporter: DB metrics (port 9187)
+#   - Redis Exporter: Cache metrics (port 9121)
+#   - Nginx Exporter: Web server metrics (port 9113)
+#   - Blackbox Exporter: Endpoint probing (port 9115)
+#
+# Default Credentials:
+#   Grafana: admin/admin (change on first login)
+#
+# Data Retention:
+#   Prometheus: 30 days
+#   Loki: 30 days (configurable)
+#
+# Resource Usage:
+#   Total CPU: ~8 cores (limits)
+#   Total RAM: ~5.5 GB (limits)
+#
+################################################################################

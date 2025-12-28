@@ -1,0 +1,133 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Docker container logs
+  - job_name: docker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*.log
+    pipeline_stages:
+      - docker: {}
+      - json:
+          expressions:
+            stream: stream
+            log: log
+            time: time
+      - labels:
+          stream:
+      - timestamp:
+          source: time
+          format: RFC3339Nano
+      - output:
+          source: log
+
+  # Application logs from /logs directory
+  - job_name: application
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: application
+          __path__: /logs/**/*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\S+)\s+(?P<level>\w+)\s+(?P<message>.+)$'
+      - labels:
+          level:
+      - timestamp:
+          source: timestamp
+          format: '2006-01-02 15:04:05'
+      - output:
+          source: message
+
+  # Backend logs
+  - job_name: backend
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: backend
+          app: promptforge
+          component: backend
+          __path__: /logs/backend*/*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\S+)\s+(?P<level>\w+)\s+(?P<logger>\S+)\s+(?P<message>.+)$'
+      - labels:
+          level:
+          logger:
+      - timestamp:
+          source: timestamp
+          format: '2006-01-02 15:04:05'
+      - output:
+          source: message
+
+  # Nginx access logs
+  - job_name: nginx-access
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: nginx
+          type: access
+          __path__: /logs/nginx/*-access.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<remote_addr>\S+) - (?P<remote_user>\S+) \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<request_uri>\S+) (?P<protocol>\S+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+      - labels:
+          method:
+          status:
+      - timestamp:
+          source: time_local
+          format: '02/Jan/2006:15:04:05 -0700'
+
+  # Nginx error logs
+  - job_name: nginx-error
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: nginx
+          type: error
+          __path__: /logs/nginx/*-error.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<level>\w+)\] (?P<message>.+)$'
+      - labels:
+          level:
+      - timestamp:
+          source: timestamp
+          format: '2006/01/02 15:04:05'
+      - output:
+          source: message
+
+  # System logs
+  - job_name: syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          __path__: /var/log/syslog
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\w+ \d+ \d+:\d+:\d+) (?P<hostname>\S+) (?P<app>\S+)(\[(?P<pid>\d+)\])?: (?P<message>.+)$'
+      - labels:
+          hostname:
+          app:
+      - timestamp:
+          source: timestamp
+          format: 'Jan 02 15:04:05'
+      - output:
+          source: message

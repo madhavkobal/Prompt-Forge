@@ -1,0 +1,182 @@
+################################################################################
+# AlertManager Configuration for PromptForge
+################################################################################
+
+global:
+  # Default SMTP configuration (email notifications)
+  smtp_smarthost: '${SMTP_HOST:-smtp.gmail.com:587}'
+  smtp_from: '${ALERT_EMAIL_FROM:-alerts@promptforge.io}'
+  smtp_auth_username: '${SMTP_USERNAME:-}'
+  smtp_auth_password: '${SMTP_PASSWORD:-}'
+  smtp_require_tls: true
+
+  # Slack webhook URL (if using Slack)
+  slack_api_url: '${SLACK_WEBHOOK_URL:-}'
+
+  # Default notification timeout
+  resolve_timeout: 5m
+
+# Templates for custom alert messages
+templates:
+  - '/etc/alertmanager/*.tmpl'
+
+# Route configuration
+route:
+  # Default receiver for all alerts
+  receiver: 'default'
+
+  # Group alerts by these labels
+  group_by: ['alertname', 'cluster', 'service']
+
+  # How long to wait before sending a notification for a group
+  group_wait: 10s
+
+  # How long to wait before sending a notification about new alerts
+  group_interval: 10s
+
+  # How often to resend notifications
+  repeat_interval: 12h
+
+  # Child routes for specific alert types
+  routes:
+    # Critical alerts go to multiple channels
+    - match:
+        severity: critical
+      receiver: 'critical'
+      continue: true
+      group_wait: 10s
+      repeat_interval: 5m
+
+    # Database alerts
+    - match:
+        component: database
+      receiver: 'database-team'
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # System alerts
+    - match:
+        component: system
+      receiver: 'ops-team'
+      group_wait: 30s
+      repeat_interval: 2h
+
+    # Monitoring stack alerts (lower priority)
+    - match:
+        component: monitoring
+      receiver: 'monitoring-team'
+      group_wait: 1m
+      repeat_interval: 4h
+
+# Inhibition rules (suppress certain alerts when others are firing)
+inhibit_rules:
+  # Suppress warning if critical is firing for same alertname
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+  # Suppress endpoint alerts if container is down
+  - source_match:
+      alertname: 'ContainerDown'
+    target_match_re:
+      alertname: 'HTTPEndpoint.*'
+    equal: ['instance']
+
+  # Suppress individual service alerts if system is down
+  - source_match:
+      severity: 'critical'
+      component: 'system'
+    target_match:
+      severity: 'warning'
+    equal: ['instance']
+
+# Receivers configuration
+receivers:
+  # Default receiver (console/log only)
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook'
+        send_resolved: true
+
+  # Critical alerts - multiple notification channels
+  - name: 'critical'
+    email_configs:
+      - to: '${ALERT_EMAIL_CRITICAL:-admin@promptforge.io}'
+        headers:
+          Subject: '[CRITICAL] PromptForge Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Critical Alert</h2>
+          <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+          <p><strong>Summary:</strong> {{ .CommonAnnotations.summary }}</p>
+          <p><strong>Description:</strong> {{ .CommonAnnotations.description }}</p>
+          <p><strong>Severity:</strong> {{ .CommonLabels.severity }}</p>
+          <p><strong>Time:</strong> {{ .StartsAt }}</p>
+        send_resolved: true
+
+    # Slack notification (if configured)
+    slack_configs:
+      - channel: '#promptforge-alerts'
+        title: 'CRITICAL: {{ .GroupLabels.alertname }}'
+        text: '{{ .CommonAnnotations.description }}'
+        send_resolved: true
+
+    # PagerDuty (if configured)
+    # pagerduty_configs:
+    #   - service_key: '${PAGERDUTY_SERVICE_KEY:-}'
+    #     description: '{{ .CommonAnnotations.summary }}'
+
+  # Database team
+  - name: 'database-team'
+    email_configs:
+      - to: '${ALERT_EMAIL_DATABASE:-dba@promptforge.io}'
+        headers:
+          Subject: '[Database] PromptForge Alert: {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+  # Operations team
+  - name: 'ops-team'
+    email_configs:
+      - to: '${ALERT_EMAIL_OPS:-ops@promptforge.io}'
+        headers:
+          Subject: '[System] PromptForge Alert: {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+  # Monitoring team
+  - name: 'monitoring-team'
+    email_configs:
+      - to: '${ALERT_EMAIL_MONITORING:-monitoring@promptforge.io}'
+        headers:
+          Subject: '[Monitoring] PromptForge Alert: {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+################################################################################
+# Configuration Notes
+################################################################################
+#
+# Environment Variables:
+#   SMTP_HOST           - SMTP server (default: smtp.gmail.com:587)
+#   SMTP_USERNAME       - SMTP authentication username
+#   SMTP_PASSWORD       - SMTP authentication password
+#   ALERT_EMAIL_FROM    - From address for emails
+#   ALERT_EMAIL_CRITICAL - Critical alerts email
+#   ALERT_EMAIL_DATABASE - Database alerts email
+#   ALERT_EMAIL_OPS     - Operations alerts email
+#   ALERT_EMAIL_MONITORING - Monitoring stack alerts email
+#   SLACK_WEBHOOK_URL   - Slack webhook for notifications
+#   PAGERDUTY_SERVICE_KEY - PagerDuty integration key
+#
+# Notification Channels:
+#   1. Email (default)
+#   2. Slack (optional)
+#   3. PagerDuty (optional)
+#   4. Webhook (optional)
+#
+# To test AlertManager:
+#   curl -H "Content-Type: application/json" -d '[{
+#     "labels": {"alertname": "TestAlert", "severity": "warning"},
+#     "annotations": {"summary": "Test alert"}
+#   }]' http://localhost:9093/api/v1/alerts
+#
+################################################################################
