@@ -119,9 +119,35 @@ Before you begin, ensure you have the following installed:
 
 Choose one of the following installation methods:
 
-### Option 1: Docker Compose (Recommended for Quick Setup)
+### Option 1: Automated Installation (Ubuntu 24.04/22.04)
 
-This is the fastest way to get started - everything runs in containers.
+**Fastest and easiest way to install on Ubuntu!** One command sets up everything.
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd Prompt-Forge
+
+# Run the automated installer
+sudo ./install-ubuntu.sh --seed-demo
+```
+
+The script automatically:
+- ✅ Installs all dependencies (PostgreSQL, Python 3.11, Node.js 20)
+- ✅ Creates and configures the database
+- ✅ Sets up Python virtual environment
+- ✅ Installs all packages (backend + frontend)
+- ✅ Generates secure credentials
+- ✅ Runs database migrations
+- ✅ Seeds demo data (with `--seed-demo` flag)
+
+After installation, just add your Gemini API key to `backend/.env` and start the servers!
+
+📖 **[Full Installation Guide](docs/installation-ubuntu.md)** - Detailed documentation with troubleshooting
+
+### Option 2: Docker Compose (Cross-Platform)
+
+Great for quick setup on any OS - everything runs in containers.
 
 1. **Clone the repository**
    ```bash
@@ -185,9 +211,11 @@ This is the fastest way to get started - everything runs in containers.
 
 ---
 
-### Option 2: Manual Setup (For Development)
+### Option 3: Manual Setup (For Development)
 
 This method gives you more control and is better for active development.
+
+💡 **Tip:** On Ubuntu, use [Option 1](#option-1-automated-installation-ubuntu-24042204) instead for automated setup!
 
 #### Step 1: Clone the Repository
 
