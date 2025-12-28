@@ -1,114 +1,349 @@
 version: '3.8'
 
+################################################################################
+# PromptForge Production Docker Compose Configuration
+################################################################################
+#
+# This configuration is designed for production on-premises deployments.
+# It includes all necessary services with production-grade settings.
+#
+# Services:
+#   - nginx: Reverse proxy and load balancer
+#   - backend: FastAPI application with Gunicorn
+#   - frontend: React app served by Nginx
+#   - postgres: PostgreSQL database
+#   - redis: Cache and session storage
+#
+# Usage:
+#   docker-compose -f docker-compose.prod.yml up -d
+#
+# Prerequisites:
+#   - .env.production file configured
+#   - SSL certificates (or use Let's Encrypt)
+#   - Domain name configured
+#
+################################################################################
+
 services:
+  #############################################################################
   # PostgreSQL Database
+  #############################################################################
+  # Primary data store for all application data
   postgres:
     image: postgres:15-alpine
-    container_name: promptforge_db_prod
+    container_name: promptforge-postgres
     restart: unless-stopped
+
+    # Environment variables for database initialization
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-promptforge}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-      POSTGRES_DB: ${POSTGRES_DB:-promptforge_prod}
+      POSTGRES_DB: ${DB_NAME:-promptforge}
+      POSTGRES_USER: ${DB_USER:-promptforge}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password required}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+      # Performance tuning
+      POSTGRES_MAX_CONNECTIONS: 100
+      POSTGRES_SHARED_BUFFERS: 256MB
+
+    # Persistent volume for database data
+    # CRITICAL: Never delete this volume in production!
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups
+      - ./backups:/backups  # Mount for database backups
+
+    # Only expose port internally to other containers
+    # DO NOT expose to host in production for security
     networks:
-      - promptforge_network
+      - promptforge-network
+
+    # Health check to ensure database is ready
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-promptforge}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-promptforge} -d ${DB_NAME:-promptforge}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
-  # Redis (optional - for caching and rate limiting)
+    # Resource limits to prevent database from consuming all memory
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+  #############################################################################
+  # Redis Cache
+  #############################################################################
+  # Used for session storage, rate limiting, and caching
   redis:
     image: redis:7-alpine
-    container_name: promptforge_redis_prod
+    container_name: promptforge-redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+
+    # Redis configuration with password protection
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:?Redis password required}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+
+    # Persistent volume for Redis data
     volumes:
       - redis_data:/data
+
     networks:
-      - promptforge_network
+      - promptforge-network
+
+    # Health check
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--pass", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
 
-  # Backend API
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  #############################################################################
+  # Backend API Service
+  #############################################################################
+  # FastAPI application running with Gunicorn for production
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
-    container_name: promptforge_backend_prod
+      # Build arguments for Python version pinning
+      args:
+        PYTHON_VERSION: 3.11
+
+    container_name: promptforge-backend
     restart: unless-stopped
+
+    # Environment variables from .env.production
     env_file:
-      - ./backend/.env.production
+      - .env.production
+
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-promptforge_prod}
+      # Database connection
+      DATABASE_URL: postgresql://${DB_USER:-promptforge}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-promptforge}
+
+      # Redis connection
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+
+      # Application settings
+      ENVIRONMENT: production
+      DEBUG: "false"
+
+      # Workers configuration (CPU cores * 2 + 1)
+      WORKERS: ${BACKEND_WORKERS:-4}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+    # Volumes for logs and uploads
     volumes:
-      - ./backend/logs:/app/logs
+      - ./logs/backend:/app/logs
+      - ./uploads:/app/uploads
+
+    # Only expose internally
     networks:
-      - promptforge_network
+      - promptforge-network
+
+    # Wait for database and redis to be ready
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+    # Health check endpoint
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Frontend
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+  #############################################################################
+  # Frontend Service
+  #############################################################################
+  # React application built and served by Nginx
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      # Build arguments
       args:
-        VITE_API_URL: ${VITE_API_URL:-https://api.yourdomain.com}
-    container_name: promptforge_frontend_prod
-    restart: unless-stopped
-    networks:
-      - promptforge_network
-    depends_on:
-      - backend
+        NODE_VERSION: 20
+        VITE_API_URL: ${VITE_API_URL:-http://localhost/api}
 
-  # Nginx Reverse Proxy
-  nginx:
-    image: nginx:alpine
-    container_name: promptforge_nginx_prod
+    container_name: promptforge-frontend
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
+
+    # Nginx configuration for serving static files
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./nginx/logs:/var/log/nginx
+      - ./nginx/frontend.conf:/etc/nginx/conf.d/default.conf:ro
+
     networks:
-      - promptforge_network
-    depends_on:
-      - frontend
-      - backend
+      - promptforge-network
+
+    # Health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
       interval: 30s
       timeout: 10s
       retries: 3
 
+    # Resource limits (frontend is lightweight)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  #############################################################################
+  # Nginx Reverse Proxy
+  #############################################################################
+  # Main entry point - handles SSL, load balancing, static files
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: promptforge-nginx
+    restart: unless-stopped
+
+    # Port mappings
+    ports:
+      - "80:80"      # HTTP (will redirect to HTTPS)
+      - "443:443"    # HTTPS
+
+    # Nginx configuration files
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro  # SSL certificates
+      - ./logs/nginx:/var/log/nginx
+
+      # Static files
+      - ./static:/usr/share/nginx/html/static:ro
+
+    networks:
+      - promptforge-network
+
+    # Wait for backend and frontend to be ready
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+################################################################################
+# Networks
+################################################################################
+# Internal network for service-to-service communication
+networks:
+  promptforge-network:
+    driver: bridge
+    # Enable IPv6 if needed
+    # enable_ipv6: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.0.0/16
+
+################################################################################
+# Volumes
+################################################################################
+# Persistent storage that survives container restarts
 volumes:
+  # PostgreSQL data - CRITICAL: Backup regularly!
   postgres_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/postgres
+
+  # Redis data - Less critical, can be rebuilt
   redis_data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/redis
 
-networks:
-  promptforge_network:
-    driver: bridge
+################################################################################
+# Production Notes
+################################################################################
+#
+# 1. SECURITY:
+#    - Never expose database ports to the internet
+#    - Use strong passwords in .env.production
+#    - Keep SSL certificates up to date
+#    - Enable firewall (ufw/iptables)
+#    - Regular security updates: docker-compose pull
+#
+# 2. BACKUPS:
+#    - Run daily database backups (see backup.sh)
+#    - Store backups off-site
+#    - Test restore procedure regularly
+#    - Keep at least 7 days of backups
+#
+# 3. MONITORING:
+#    - Check logs: docker-compose logs -f [service]
+#    - Monitor resource usage: docker stats
+#    - Set up log aggregation (ELK, Grafana)
+#    - Configure alerts for failures
+#
+# 4. UPDATES:
+#    - Use zero-downtime deployment (see update.sh)
+#    - Test updates in staging first
+#    - Keep rollback plan ready
+#    - Backup before major updates
+#
+# 5. SCALING:
+#    - Increase BACKEND_WORKERS for more traffic
+#    - Add more backend replicas if needed
+#    - Use external load balancer for multi-server
+#    - Consider database read replicas
+#
+################################################################################
