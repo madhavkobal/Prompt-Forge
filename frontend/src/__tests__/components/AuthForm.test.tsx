@@ -42,8 +42,8 @@ describe('Login Component', () => {
     render(<Login />);
 
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/password/i, { selector: 'input' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
     expect(screen.getByText(/don't have an account/i)).toBeInTheDocument();
   });
 
@@ -51,12 +51,12 @@ describe('Login Component', () => {
     const user = userEvent.setup();
     render(<Login />);
 
-    const loginButton = screen.getByRole('button', { name: /log in/i });
+    const loginButton = screen.getByRole('button', { name: /sign in/i });
     await user.click(loginButton);
 
     // Check for validation messages
     expect(screen.getByLabelText(/username/i)).toBeInvalid();
-    expect(screen.getByLabelText(/password/i)).toBeInvalid();
+    expect(screen.getByLabelText(/password/i, { selector: 'input' })).toBeInvalid();
   });
 
   it('handles successful login', async () => {
@@ -69,10 +69,10 @@ describe('Login Component', () => {
 
     // Fill in form
     await user.type(screen.getByLabelText(/username/i), 'testuser');
-    await user.type(screen.getByLabelText(/password/i), 'password123');
+    await user.type(screen.getByLabelText(/password/i, { selector: 'input' }), 'password123');
 
     // Submit form
-    await user.click(screen.getByRole('button', { name: /log in/i }));
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
       expect(authService.authService.login).toHaveBeenCalledWith(
@@ -95,8 +95,8 @@ describe('Login Component', () => {
     render(<Login />);
 
     await user.type(screen.getByLabelText(/username/i), 'wronguser');
-    await user.type(screen.getByLabelText(/password/i), 'wrongpass');
-    await user.click(screen.getByRole('button', { name: /log in/i }));
+    await user.type(screen.getByLabelText(/password/i, { selector: 'input' }), 'wrongpass');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
       expect(screen.getByText(errorMessage)).toBeInTheDocument();
@@ -112,9 +112,9 @@ describe('Login Component', () => {
     render(<Login />);
 
     await user.type(screen.getByLabelText(/username/i), 'testuser');
-    await user.type(screen.getByLabelText(/password/i), 'password123');
+    await user.type(screen.getByLabelText(/password/i, { selector: 'input' }), 'password123');
 
-    const loginButton = screen.getByRole('button', { name: /log in/i });
+    const loginButton = screen.getByRole('button', { name: /sign in/i });
     await user.click(loginButton);
 
     expect(loginButton).toBeDisabled();
@@ -124,7 +124,7 @@ describe('Login Component', () => {
     const user = userEvent.setup();
     render(<Login />);
 
-    const passwordInput = screen.getByLabelText(/password/i);
+    const passwordInput = screen.getByLabelText(/password/i, { selector: 'input' });
     expect(passwordInput).toHaveAttribute('type', 'password');
 
     const toggleButton = screen.getByRole('button', { name: /show password/i });
@@ -255,7 +255,7 @@ describe('Authentication Forms Accessibility', () => {
     render(<Login />);
 
     expect(screen.getByLabelText(/username/i)).toHaveAttribute('type');
-    expect(screen.getByLabelText(/password/i)).toHaveAttribute('type', 'password');
+    expect(screen.getByLabelText(/password/i, { selector: 'input' })).toHaveAttribute('type', 'password');
   });
 
   it('register form has proper labels', () => {
@@ -271,7 +271,7 @@ describe('Authentication Forms Accessibility', () => {
     render(<Login />);
 
     const usernameInput = screen.getByLabelText(/username/i);
-    const passwordInput = screen.getByLabelText(/password/i);
+    const passwordInput = screen.getByLabelText(/password/i, { selector: 'input' });
 
     await user.tab();
     expect(usernameInput).toHaveFocus();
