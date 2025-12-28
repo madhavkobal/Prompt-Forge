@@ -83,17 +83,17 @@ jobs:
         if [ -f coverage.json ]; then
           echo "## Backend Test Coverage (Python ${{ matrix.python-version }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          python3 -c "
-import json
-with open('coverage.json') as f:
-    data = json.load(f)
-    totals = data['totals']
-    print('| Metric | Coverage |')
-    print('|--------|----------|')
-    print(f\"| Statements | {totals['percent_covered']:.2f}% |\")
-    print(f\"| Covered Lines | {totals['covered_lines']} / {totals['num_statements']} |\")
-    print(f\"| Missing Lines | {totals['missing_lines']} |\")
-" >> $GITHUB_STEP_SUMMARY
+          python3 <<'PYTHON_SCRIPT' >> $GITHUB_STEP_SUMMARY
+        import json
+        with open("coverage.json") as f:
+            data = json.load(f)
+            totals = data["totals"]
+            print("| Metric | Coverage |")
+            print("|--------|----------|")
+            print(f"| Statements | {totals['percent_covered']:.2f}% |")
+            print(f"| Covered Lines | {totals['covered_lines']} / {totals['num_statements']} |")
+            print(f"| Missing Lines | {totals['missing_lines']} |")
+        PYTHON_SCRIPT
         else
           echo "coverage.json not found, skipping summary" >> $GITHUB_STEP_SUMMARY
         fi
