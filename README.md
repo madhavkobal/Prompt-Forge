@@ -5,16 +5,17 @@
 PromptForge helps you analyze, enhance, and optimize your AI prompts using Google Gemini API. Get detailed quality scores, actionable suggestions, and LLM-specific best practices for ChatGPT, Claude, Gemini, Grok, and DeepSeek.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![Node](https://img.shields.io/badge/node-20+-green.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)
 ![React](https://img.shields.io/badge/React-18+-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 
 [![Backend Tests](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/test.yml/badge.svg)](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/test.yml)
 [![Frontend Tests](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/frontend-test.yml/badge.svg)](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/frontend-test.yml)
-[![codecov](https://codecov.io/gh/madhavkobal/Prompt-Forge/branch/main/graph/badge.svg)](https://codecov.io/gh/madhavkobal/Prompt-Forge)
-[![Backend Coverage](https://img.shields.io/badge/Backend%20Coverage-63%25-yellow.svg)](https://github.com/madhavkobal/Prompt-Forge)
-[![Frontend Coverage](https://img.shields.io/badge/Frontend%20Coverage-TBD-lightgrey.svg)](https://github.com/madhavkobal/Prompt-Forge)
+[![Security Scan](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/security-scan.yml/badge.svg)](https://github.com/madhavkobal/Prompt-Forge/actions/workflows/security-scan.yml)
+[![Backend Coverage](https://img.shields.io/badge/Backend%20Coverage-51%25-yellow.svg)](https://github.com/madhavkobal/Prompt-Forge)
+[![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 ---
 
@@ -758,12 +759,29 @@ taskkill /PID <PID> /F  # Windows
 
 ---
 
-## 📚 Additional Resources
+## 📚 Documentation
 
-### Documentation Files
-- [API_ENDPOINTS.md](API_ENDPOINTS.md) - Complete API reference
-- [BACKEND_COMPLETION_SUMMARY.md](BACKEND_COMPLETION_SUMMARY.md) - Backend implementation details
-- [ENHANCED_EDITOR_SUMMARY.md](ENHANCED_EDITOR_SUMMARY.md) - Frontend editor features
+### User Documentation
+- **[User Guide](docs/user-guide.md)** - Complete guide to using PromptForge
+- **[Features](docs/features.md)** - Detailed feature list and capabilities
+- **[FAQ](docs/faq.md)** - Frequently asked questions and answers
+
+### Developer Documentation
+- **[API Reference](docs/api-reference.md)** - Complete REST API documentation
+- **[Architecture](docs/architecture.md)** - System architecture and design
+- **[Development Guide](docs/development.md)** - Local development setup
+- **[Contributing](docs/contributing.md)** - Contribution guidelines
+
+### Deployment Documentation
+- **[Docker Deployment](docs/deployment/docker.md)** - Deploy with Docker
+- **[Kubernetes Deployment](docs/deployment/kubernetes.md)** - Deploy on Kubernetes
+- **[AWS Deployment](docs/deployment/aws.md)** - Deploy to AWS
+- **[Maintenance](docs/maintenance.md)** - Operations and maintenance guide
+- **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
+
+### Security Documentation
+- **[Security Guide](SECURITY.md)** - Security features and best practices
+- **[Monitoring Guide](MONITORING.md)** - Monitoring and observability setup
 
 ### External Links
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
