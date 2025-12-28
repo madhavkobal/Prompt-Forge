@@ -2,7 +2,7 @@ import os
 import time
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZIPMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -117,7 +117,7 @@ if settings.ENVIRONMENT == "production":
     logger.info(f"Trusted hosts middleware enabled: {allowed_hosts}")
 
 # Gzip compression for responses
-app.add_middleware(GZIPMiddleware, minimum_size=1000)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Configure CORS
 app.add_middleware(
