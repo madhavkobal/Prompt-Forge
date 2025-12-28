@@ -1,14 +1,27 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { authService } from '@/services/authService';
 
-import Login from '@/pages/Login';
-import Register from '@/pages/Register';
-import AnalyzerEnhanced from '@/pages/AnalyzerEnhanced';
-import Prompts from '@/pages/Prompts';
-import Templates from '@/pages/Templates';
+// Lazy load pages for code splitting
+const Login = lazy(() => import('@/pages/Login'));
+const Register = lazy(() => import('@/pages/Register'));
+const AnalyzerEnhanced = lazy(() => import('@/pages/AnalyzerEnhanced'));
+const Prompts = lazy(() => import('@/pages/Prompts'));
+const Templates = lazy(() => import('@/pages/Templates'));
+
+// Loading component for suspense fallback
+function PageLoader() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <p className="mt-4 text-gray-600">Loading...</p>
+      </div>
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
@@ -38,35 +51,37 @@ function App() {
   return (
     <>
       <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route
-            path="/analyzer"
-            element={
-              <ProtectedRoute>
-                <AnalyzerEnhanced />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/prompts"
-            element={
-              <ProtectedRoute>
-                <Prompts />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/templates"
-            element={
-              <ProtectedRoute>
-                <Templates />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/" element={<Navigate to="/analyzer" replace />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route
+              path="/analyzer"
+              element={
+                <ProtectedRoute>
+                  <AnalyzerEnhanced />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/prompts"
+              element={
+                <ProtectedRoute>
+                  <Prompts />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/templates"
+              element={
+                <ProtectedRoute>
+                  <Templates />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/" element={<Navigate to="/analyzer" replace />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
       <Toaster position="top-right" />
     </>
