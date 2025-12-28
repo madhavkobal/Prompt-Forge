@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
 
+    # Logging
+    LOG_LEVEL: str = "INFO"
+
+    # Monitoring
+    ENABLE_METRICS: bool = True
+
     class Config:
         env_file = ".env"
         case_sensitive = True

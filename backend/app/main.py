@@ -11,8 +11,9 @@ from app.api import auth, prompts, templates, analysis
 import logging
 
 # Configure logging
+log_level = getattr(settings, 'LOG_LEVEL', 'INFO')
 logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL, logging.INFO),
+    level=getattr(logging, log_level, logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -140,7 +141,8 @@ async def metrics():
     Basic metrics endpoint for monitoring
     Can be extended with Prometheus metrics
     """
-    if settings.ENVIRONMENT == "production" and not settings.ENABLE_METRICS:
+    enable_metrics = getattr(settings, 'ENABLE_METRICS', True)
+    if settings.ENVIRONMENT == "production" and not enable_metrics:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"detail": "Metrics endpoint is disabled"}
