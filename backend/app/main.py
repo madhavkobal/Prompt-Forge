@@ -6,33 +6,65 @@ from fastapi.middleware.gzip import GZIPMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from app.core.config import settings
 from app.core.database import Base, engine as db_engine
-from app.core.logging_config import setup_logging, get_logger
-from app.core.metrics import MetricsMiddleware, get_metrics, track_exception
-from app.core.health import (
-    detailed_health_check,
-    basic_health_check,
-    readiness_probe,
-    liveness_probe,
-    get_system_metrics
-)
 from app.api import auth, prompts, templates, analysis
 
-# Initialize structured logging
-setup_logging()
-logger = get_logger(__name__)
+# Optional: Import monitoring modules if available
+try:
+    from app.core.logging_config import setup_logging, get_logger
+    LOGGING_AVAILABLE = True
+except ImportError:
+    LOGGING_AVAILABLE = False
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    logger.warning("Structured logging not available - using basic logging")
 
-# Initialize Sentry if configured
-if settings.SENTRY_DSN:
+try:
+    from app.core.metrics import MetricsMiddleware, get_metrics, track_exception
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+    if LOGGING_AVAILABLE:
+        logger.warning("Prometheus metrics not available")
+
+try:
+    from app.core.health import (
+        detailed_health_check,
+        basic_health_check,
+        readiness_probe,
+        liveness_probe,
+        get_system_metrics
+    )
+    HEALTH_CHECKS_AVAILABLE = True
+except ImportError:
+    HEALTH_CHECKS_AVAILABLE = False
+    if LOGGING_AVAILABLE:
+        logger.warning("Enhanced health checks not available")
+
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+    SENTRY_AVAILABLE = True
+except ImportError:
+    SENTRY_AVAILABLE = False
+    if LOGGING_AVAILABLE:
+        logger.warning("Sentry error tracking not available")
+
+# Initialize structured logging if available
+if LOGGING_AVAILABLE:
+    setup_logging()
+    logger = get_logger(__name__)
+
+# Initialize Sentry if configured and available
+if SENTRY_AVAILABLE and settings.SENTRY_DSN:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
-        environment=settings.SENTRY_ENVIRONMENT or settings.ENVIRONMENT,
-        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        environment=getattr(settings, 'SENTRY_ENVIRONMENT', None) or settings.ENVIRONMENT,
+        traces_sample_rate=getattr(settings, 'SENTRY_TRACES_SAMPLE_RATE', 0.1),
         integrations=[
             FastApiIntegration(),
             SqlalchemyIntegration(),
@@ -74,7 +106,7 @@ app = FastAPI(
 )
 
 # Add Prometheus metrics middleware
-if settings.ENABLE_METRICS:
+if METRICS_AVAILABLE and settings.ENABLE_METRICS:
     app.add_middleware(MetricsMiddleware)
     logger.info("Prometheus metrics middleware enabled")
 
@@ -152,7 +184,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     exception_type = type(exc).__name__
 
     # Track exception in metrics
-    if settings.ENABLE_METRICS:
+    if METRICS_AVAILABLE and settings.ENABLE_METRICS:
         endpoint = request.url.path
         track_exception(exception_type, endpoint)
 
@@ -169,7 +201,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
     # Capture in Sentry (if configured)
-    if settings.SENTRY_DSN:
+    if SENTRY_AVAILABLE and settings.SENTRY_DSN:
         sentry_sdk.capture_exception(exc)
 
     # Return error response
@@ -207,7 +239,15 @@ async def health_check():
     Basic health check endpoint
     Returns simple health status for uptime monitoring
     """
-    return await basic_health_check()
+    if HEALTH_CHECKS_AVAILABLE:
+        return await basic_health_check()
+
+    # Fallback basic health check
+    return {
+        "status": "healthy",
+        "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT
+    }
 
 
 @app.get("/health/detailed", tags=["Health"])
@@ -216,7 +256,14 @@ async def detailed_health():
     Detailed health check with all dependencies
     Checks database, Gemini API, and other services
     """
-    return await detailed_health_check()
+    if HEALTH_CHECKS_AVAILABLE:
+        return await detailed_health_check()
+
+    # Fallback to basic check
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "Detailed health checks not available"}
+    )
 
 
 @app.get("/health/ready", tags=["Health"])
@@ -225,7 +272,11 @@ async def readiness():
     Kubernetes readiness probe
     Indicates if the service is ready to accept traffic
     """
-    return await readiness_probe()
+    if HEALTH_CHECKS_AVAILABLE:
+        return await readiness_probe()
+
+    # Fallback readiness check
+    return {"ready": True, "timestamp": time.time()}
 
 
 @app.get("/health/live", tags=["Health"])
@@ -234,7 +285,11 @@ async def liveness():
     Kubernetes liveness probe
     Indicates if the service is alive and should not be restarted
     """
-    return await liveness_probe()
+    if HEALTH_CHECKS_AVAILABLE:
+        return await liveness_probe()
+
+    # Fallback liveness check
+    return {"alive": True, "timestamp": time.time()}
 
 
 # Metrics endpoint
@@ -244,6 +299,12 @@ async def metrics():
     Prometheus metrics endpoint
     Exposes application metrics for monitoring
     """
+    if not METRICS_AVAILABLE:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "Metrics module not available"}
+        )
+
     if not settings.ENABLE_METRICS:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -260,6 +321,12 @@ async def system_metrics():
     System-level metrics
     Provides CPU, memory, and process information
     """
+    if not HEALTH_CHECKS_AVAILABLE:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "System metrics not available"}
+        )
+
     if settings.ENVIRONMENT == "production":
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
