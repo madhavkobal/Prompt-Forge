@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -28,9 +28,21 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "json"  # json or text
 
-    # Monitoring
+    # Monitoring & Observability
     ENABLE_METRICS: bool = True
+    SENTRY_DSN: Optional[str] = None
+    SENTRY_ENVIRONMENT: Optional[str] = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1  # 10% of transactions
+
+    # Performance Monitoring
+    ENABLE_REQUEST_TIMING: bool = True
+    SLOW_REQUEST_THRESHOLD: float = 1.0  # seconds
+
+    # Health Checks
+    ENABLE_DETAILED_HEALTH_CHECK: bool = True
+    HEALTH_CHECK_TIMEOUT: int = 5  # seconds
 
     class Config:
         env_file = ".env"

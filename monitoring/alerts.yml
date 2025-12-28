@@ -1,0 +1,160 @@
+# Prometheus alerting rules for PromptForge
+
+groups:
+  - name: promptforge_availability
+    interval: 30s
+    rules:
+      # Service down
+      - alert: PromptForgeDown
+        expr: up{job="promptforge-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PromptForge backend is down"
+          description: "The PromptForge backend service has been down for more than 1 minute."
+
+      # Database connection issues
+      - alert: DatabaseConnectionFailing
+        expr: database_connections_active == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No active database connections"
+          description: "Database connections are not active. Service may be unable to process requests."
+
+  - name: promptforge_performance
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status_code=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: "Error rate is {{ $value | humanize }} errors/sec (5xx responses)"
+
+      # Very high error rate
+      - alert: VeryHighErrorRate
+        expr: rate(http_requests_total{status_code=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Very high HTTP 5xx error rate"
+          description: "Critical error rate: {{ $value | humanize }} errors/sec"
+
+      # Slow requests
+      - alert: TooManySlowRequests
+        expr: rate(slow_requests_total[5m]) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of slow requests"
+          description: "{{ $value | humanize }} slow requests per second"
+
+      # High request latency
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2.0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency (95th percentile)"
+          description: "95th percentile latency is {{ $value | humanize }}s"
+
+  - name: promptforge_resources
+    interval: 30s
+    rules:
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes > 1073741824  # 1GB
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizeBytes }}"
+
+      # Very high memory usage
+      - alert: VeryHighMemoryUsage
+        expr: process_resident_memory_bytes > 2147483648  # 2GB
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Very high memory usage"
+          description: "Critical memory usage: {{ $value | humanizeBytes }}"
+
+  - name: promptforge_gemini_api
+    interval: 30s
+    rules:
+      # High Gemini API error rate
+      - alert: HighGeminiAPIErrorRate
+        expr: rate(gemini_api_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Gemini API error rate"
+          description: "Gemini API error rate: {{ $value | humanize }} errors/sec"
+
+      # Slow Gemini API responses
+      - alert: SlowGeminiAPIResponses
+        expr: histogram_quantile(0.95, rate(gemini_api_duration_seconds_bucket[5m])) > 10.0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow Gemini API responses"
+          description: "95th percentile Gemini API latency is {{ $value | humanize }}s"
+
+  - name: promptforge_database
+    interval: 30s
+    rules:
+      # Slow database queries
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, rate(database_query_duration_seconds_bucket[5m])) > 1.0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query latency is {{ $value | humanize }}s"
+
+      # High database query rate (potential N+1 queries)
+      - alert: HighDatabaseQueryRate
+        expr: rate(database_queries_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database query rate"
+          description: "Database query rate is {{ $value | humanize }} queries/sec. Check for N+1 queries."
+
+  - name: promptforge_user_activity
+    interval: 1m
+    rules:
+      # Unusual spike in registrations (potential spam/abuse)
+      - alert: RegistrationSpike
+        expr: rate(user_registrations_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusual spike in user registrations"
+          description: "Registration rate: {{ $value | humanize }} registrations/sec. Potential spam or abuse."
+
+      # High login failure rate (potential attack)
+      - alert: HighLoginFailureRate
+        expr: rate(user_logins_total{status="failure"}[5m]) / rate(user_logins_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High login failure rate"
+          description: "{{ $value | humanizePercentage }} of login attempts are failing. Potential brute force attack."

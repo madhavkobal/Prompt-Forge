@@ -2,48 +2,90 @@ import os
 import time
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.gzip import GZIPMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
 from app.core.config import settings
 from app.core.database import Base, engine as db_engine
-from app.api import auth, prompts, templates, analysis
-import logging
-
-# Configure logging
-log_level = getattr(settings, 'LOG_LEVEL', 'INFO')
-logging.basicConfig(
-    level=getattr(logging, log_level, logging.INFO),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+from app.core.logging_config import setup_logging, get_logger
+from app.core.metrics import MetricsMiddleware, get_metrics, track_exception
+from app.core.health import (
+    detailed_health_check,
+    basic_health_check,
+    readiness_probe,
+    liveness_probe,
+    get_system_metrics
 )
-logger = logging.getLogger(__name__)
+from app.api import auth, prompts, templates, analysis
 
-# Create database tables for non-test environments
-# Test fixtures handle table creation during tests
-if os.environ.get("ENVIRONMENT") != "testing":
-    try:
-        Base.metadata.create_all(bind=db_engine)
-        logger.info("Database tables created successfully")
-    except Exception as e:
-        # Fail gracefully if database is not yet configured
-        logger.warning(f"Could not create database tables: {e}")
+# Initialize structured logging
+setup_logging()
+logger = get_logger(__name__)
 
+# Initialize Sentry if configured
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.SENTRY_ENVIRONMENT or settings.ENVIRONMENT,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        integrations=[
+            FastApiIntegration(),
+            SqlalchemyIntegration(),
+        ],
+        before_send=lambda event, hint: event if settings.ENVIRONMENT != "testing" else None,
+    )
+    logger.info("Sentry error tracking initialized")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events"""
+    # Startup
+    logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+
+    # Create database tables for non-test environments
+    if os.environ.get("ENVIRONMENT") != "testing":
+        try:
+            Base.metadata.create_all(bind=db_engine)
+            logger.info("Database tables created successfully")
+        except Exception as e:
+            logger.warning(f"Could not create database tables: {e}")
+
+    yield
+
+    # Shutdown
+    logger.info(f"Shutting down {settings.PROJECT_NAME}")
+
+
+# Create FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="AI-powered prompt quality analyzer and enhancement tool",
-    docs_url="/docs" if not settings.ENVIRONMENT == "production" else None,
-    redoc_url="/redoc" if not settings.ENVIRONMENT == "production" else None,
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+    lifespan=lifespan,
 )
 
-# Security Middleware
-# Trust only specific hosts in production
+# Add Prometheus metrics middleware
+if settings.ENABLE_METRICS:
+    app.add_middleware(MetricsMiddleware)
+    logger.info("Prometheus metrics middleware enabled")
+
+# Security Middleware - Trust only specific hosts in production
 if settings.ENVIRONMENT == "production":
-    allowed_hosts = settings.ALLOWED_HOSTS if hasattr(settings, 'ALLOWED_HOSTS') else ["*"]
+    allowed_hosts = getattr(settings, 'ALLOWED_HOSTS', ["*"])
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+    logger.info(f"Trusted hosts middleware enabled: {allowed_hosts}")
 
 # Gzip compression for responses
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(GZIPMiddleware, minimum_size=1000)
 
 # Configure CORS
 app.add_middleware(
@@ -53,104 +95,175 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info(f"CORS enabled for origins: {settings.CORS_ORIGINS}")
+
 
 # Request timing and logging middleware
 @app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    """Add processing time header and log requests"""
+async def add_security_headers_and_logging(request: Request, call_next):
+    """Add security headers and log requests"""
     start_time = time.time()
 
-    # Add security headers
+    # Process request
     response = await call_next(request)
+
+    # Calculate processing time
     process_time = time.time() - start_time
 
+    # Add custom headers
     response.headers["X-Process-Time"] = str(process_time)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
-    # Log request
+    if settings.ENVIRONMENT == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    # Log request with structured logging
     logger.info(
-        f"{request.method} {request.url.path} - Status: {response.status_code} - "
-        f"Time: {process_time:.3f}s"
+        "HTTP request processed",
+        extra={
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "process_time_seconds": round(process_time, 3),
+            "client_ip": request.client.host if request.client else None,
+        }
     )
 
+    # Warn on slow requests
+    if settings.ENABLE_REQUEST_TIMING and process_time > settings.SLOW_REQUEST_THRESHOLD:
+        logger.warning(
+            f"Slow request detected: {request.method} {request.url.path}",
+            extra={
+                "process_time_seconds": round(process_time, 3),
+                "threshold_seconds": settings.SLOW_REQUEST_THRESHOLD,
+            }
+        )
+
     return response
+
 
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle uncaught exceptions"""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal server error" if settings.ENVIRONMENT == "production" else str(exc)},
+    """Handle uncaught exceptions with logging and metrics"""
+    # Get exception type
+    exception_type = type(exc).__name__
+
+    # Track exception in metrics
+    if settings.ENABLE_METRICS:
+        endpoint = request.url.path
+        track_exception(exception_type, endpoint)
+
+    # Log exception with context
+    logger.error(
+        f"Unhandled exception: {exception_type}",
+        exc_info=True,
+        extra={
+            "exception_type": exception_type,
+            "endpoint": request.url.path,
+            "method": request.method,
+            "client_ip": request.client.host if request.client else None,
+        }
     )
 
-# Include routers
+    # Capture in Sentry (if configured)
+    if settings.SENTRY_DSN:
+        sentry_sdk.capture_exception(exc)
+
+    # Return error response
+    error_detail = str(exc) if settings.ENVIRONMENT != "production" else "Internal server error"
+
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": error_detail},
+    )
+
+
+# Include API routers
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Authentication"])
 app.include_router(prompts.router, prefix=f"{settings.API_V1_STR}/prompts", tags=["Prompts"])
 app.include_router(templates.router, prefix=f"{settings.API_V1_STR}/templates", tags=["Templates"])
 app.include_router(analysis.router, prefix=f"{settings.API_V1_STR}/analysis", tags=["Advanced Analysis"])
 
 
-@app.get("/")
+# Root endpoint
+@app.get("/", tags=["Root"])
 def root():
-    """Root endpoint"""
+    """API root endpoint"""
     return {
         "message": "Welcome to PromptForge API",
         "version": settings.VERSION,
-        "docs": "/docs",
+        "environment": settings.ENVIRONMENT,
+        "docs": "/docs" if settings.ENVIRONMENT != "production" else None,
     }
 
 
-@app.get("/health")
+# Health check endpoints
+@app.get("/health", tags=["Health"])
 async def health_check():
     """
-    Comprehensive health check endpoint
-    Checks database connectivity and returns service status
+    Basic health check endpoint
+    Returns simple health status for uptime monitoring
     """
-    health_status = {
-        "status": "healthy",
-        "version": settings.VERSION,
-        "environment": settings.ENVIRONMENT,
-    }
+    return await basic_health_check()
 
-    # Check database connection
-    try:
-        from sqlalchemy import text
-        with db_engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-        health_status["database"] = "connected"
-    except Exception as e:
-        health_status["status"] = "unhealthy"
-        health_status["database"] = "disconnected"
-        health_status["error"] = str(e) if settings.ENVIRONMENT != "production" else "Database connection failed"
-        logger.error(f"Health check failed: {e}")
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content=health_status
-        )
 
-    return health_status
+@app.get("/health/detailed", tags=["Health"])
+async def detailed_health():
+    """
+    Detailed health check with all dependencies
+    Checks database, Gemini API, and other services
+    """
+    return await detailed_health_check()
 
-@app.get("/metrics")
+
+@app.get("/health/ready", tags=["Health"])
+async def readiness():
+    """
+    Kubernetes readiness probe
+    Indicates if the service is ready to accept traffic
+    """
+    return await readiness_probe()
+
+
+@app.get("/health/live", tags=["Health"])
+async def liveness():
+    """
+    Kubernetes liveness probe
+    Indicates if the service is alive and should not be restarted
+    """
+    return await liveness_probe()
+
+
+# Metrics endpoint
+@app.get("/metrics", tags=["Monitoring"])
 async def metrics():
     """
-    Basic metrics endpoint for monitoring
-    Can be extended with Prometheus metrics
+    Prometheus metrics endpoint
+    Exposes application metrics for monitoring
     """
-    enable_metrics = getattr(settings, 'ENABLE_METRICS', True)
-    if settings.ENVIRONMENT == "production" and not enable_metrics:
+    if not settings.ENABLE_METRICS:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"detail": "Metrics endpoint is disabled"}
         )
 
-    # TODO: Add Prometheus metrics or custom metrics
-    return {
-        "uptime": "Available via monitoring tools",
-        "requests_total": "Available via monitoring tools",
-        "active_connections": "Available via monitoring tools",
-    }
+    return get_metrics()
+
+
+# System metrics endpoint (for debugging)
+@app.get("/system/metrics", tags=["Monitoring"])
+async def system_metrics():
+    """
+    System-level metrics
+    Provides CPU, memory, and process information
+    """
+    if settings.ENVIRONMENT == "production":
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "System metrics not available in production"}
+        )
+
+    return await get_system_metrics()
