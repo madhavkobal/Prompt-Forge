@@ -1,0 +1,81 @@
+version: '3.8'
+
+################################################################################
+# PromptForge Production with Let's Encrypt SSL
+################################################################################
+#
+# This extends the base production configuration with automatic SSL certificate
+# management using Let's Encrypt and Certbot.
+#
+# Usage:
+#   docker-compose -f docker-compose.prod.yml -f docker-compose.ssl.yml up -d
+#
+################################################################################
+
+services:
+  #############################################################################
+  # Certbot - Let's Encrypt Certificate Management
+  #############################################################################
+  certbot:
+    image: certbot/certbot:latest
+    container_name: promptforge-certbot
+
+    # Certbot only runs when needed, not continuously
+    restart: "no"
+
+    # Volumes for certificates and challenges
+    volumes:
+      # Certificate storage
+      - ./nginx/ssl/letsencrypt:/etc/letsencrypt
+
+      # ACME challenge directory (for HTTP-01 validation)
+      - ./nginx/ssl/certbot:/var/www/certbot
+
+      # Logs
+      - ./logs/certbot:/var/log/letsencrypt
+
+    # Command to obtain/renew certificates
+    # This will be overridden when running manually
+    command: certonly --webroot --webroot-path=/var/www/certbot --email ${CERTBOT_EMAIL} --agree-tos --no-eff-email --force-renewal -d ${DOMAIN} -d www.${DOMAIN}
+
+    networks:
+      - promptforge-network
+
+  #############################################################################
+  # Nginx - Updated with SSL Support
+  #############################################################################
+  nginx:
+    # Mount additional volumes for SSL
+    volumes:
+      # Let's Encrypt certificates
+      - ./nginx/ssl/letsencrypt:/etc/letsencrypt:ro
+
+      # ACME challenge directory
+      - ./nginx/ssl/certbot:/var/www/certbot:ro
+
+      # SSL configuration
+      - ./nginx/conf.d/ssl.conf:/etc/nginx/conf.d/ssl.conf:ro
+
+      # DH parameters for enhanced security
+      - ./nginx/ssl/dhparam.pem:/etc/nginx/ssl/dhparam.pem:ro
+
+    # Depends on certbot being run at least once
+    depends_on:
+      - backend
+      - frontend
+
+################################################################################
+# Additional Notes
+################################################################################
+#
+# Initial Setup:
+#   1. Set DOMAIN and CERTBOT_EMAIL in .env.production
+#   2. Start nginx without SSL first (to pass ACME challenge)
+#   3. Run: docker-compose run certbot
+#   4. Restart nginx to load certificates
+#
+# Automatic Renewal:
+#   Add to cron:
+#   0 0 * * * docker-compose run certbot renew && docker-compose exec nginx nginx -s reload
+#
+################################################################################
