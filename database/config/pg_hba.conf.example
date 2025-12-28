@@ -1,0 +1,227 @@
+################################################################################
+# PromptForge PostgreSQL Host-Based Authentication Configuration
+################################################################################
+#
+# This file controls: which hosts are allowed to connect, how clients
+# are authenticated, which PostgreSQL user names they can use, which
+# databases they can access.
+#
+# Records take the form:
+#
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+#
+# TYPE:
+#   local      - Unix domain socket connections
+#   host       - TCP/IP connections (encrypted or not)
+#   hostssl    - TCP/IP connections with SSL/TLS only
+#   hostnossl  - TCP/IP connections without SSL/TLS
+#
+# DATABASE:
+#   "all", "sameuser", "samerole", "replication", database name(s)
+#
+# USER:
+#   "all", user name(s), @file, +group
+#
+# ADDRESS:
+#   IPv4: 0.0.0.0/0 (all), 192.168.1.0/24 (subnet)
+#   IPv6: ::0/0 (all), ::1/128 (localhost)
+#   Hostname: example.com
+#
+# METHOD:
+#   trust      - Allow connection unconditionally (INSECURE)
+#   reject     - Reject connection unconditionally
+#   scram-sha-256 - Password authentication (most secure)
+#   md5        - MD5 password authentication (legacy)
+#   peer       - Use OS username (local connections only)
+#   ident      - Use identd service
+#   cert       - SSL certificate authentication
+#
+# Usage:
+#   1. Copy to pg_hba.conf location (usually /etc/postgresql/*/main/)
+#   2. Adjust IP addresses/networks for your environment
+#   3. Reload PostgreSQL: sudo systemctl reload postgresql
+#
+################################################################################
+
+#------------------------------------------------------------------------------
+# Local Connections
+#------------------------------------------------------------------------------
+
+# Allow local connections from postgres user for maintenance
+local   all             postgres                                peer
+
+# Allow local connections from application user
+local   promptforge_prod    promptforge_app                     scram-sha-256
+
+# Allow local connections from backup user
+local   all             promptforge_backup                      scram-sha-256
+
+# Allow local connections from read-only user
+local   all             promptforge_readonly                    scram-sha-256
+
+#------------------------------------------------------------------------------
+# Docker Network Connections
+#------------------------------------------------------------------------------
+
+# Allow connections from Docker network (adjust network range as needed)
+# Default Docker bridge network: 172.17.0.0/16
+# Custom Docker network (from docker-compose): 172.25.0.0/16
+host    promptforge_prod    promptforge_app     172.25.0.0/16       scram-sha-256
+
+# Allow read-only connections from Docker network
+host    promptforge_prod    promptforge_readonly 172.25.0.0/16      scram-sha-256
+
+#------------------------------------------------------------------------------
+# Internal Network Connections (adjust for your network)
+#------------------------------------------------------------------------------
+
+# Example: Allow application server connections from internal network
+# Uncomment and adjust IP range for your network
+# host    promptforge_prod    promptforge_app     192.168.1.0/24      scram-sha-256
+
+# Example: Allow read-only connections from BI/analytics tools
+# host    promptforge_prod    promptforge_readonly 192.168.2.0/24     scram-sha-256
+
+#------------------------------------------------------------------------------
+# Backup Connections
+#------------------------------------------------------------------------------
+
+# Allow backup user to connect from backup server
+# Adjust IP address to your backup server
+# host    all             promptforge_backup      192.168.1.100/32    scram-sha-256
+
+# Allow backup user local access for cron jobs
+local   all             promptforge_backup                          scram-sha-256
+
+#------------------------------------------------------------------------------
+# Replication Connections (if using streaming replication)
+#------------------------------------------------------------------------------
+
+# Allow replication connections from standby servers
+# Adjust IP addresses to your standby servers
+# hostssl replication     replicator          192.168.1.50/32     scram-sha-256
+# hostssl replication     replicator          192.168.1.51/32     scram-sha-256
+
+#------------------------------------------------------------------------------
+# Administrative Access
+#------------------------------------------------------------------------------
+
+# Allow postgres superuser from localhost only (for maintenance)
+host    all             postgres            127.0.0.1/32            scram-sha-256
+host    all             postgres            ::1/128                 scram-sha-256
+
+#------------------------------------------------------------------------------
+# Development/Testing (REMOVE IN PRODUCTION)
+#------------------------------------------------------------------------------
+
+# WARNING: The following rules are for development only
+# Comment out or remove these lines in production
+
+# Allow all users from localhost (development only)
+# host    all             all                 127.0.0.1/32            scram-sha-256
+# host    all             all                 ::1/128                 scram-sha-256
+
+#------------------------------------------------------------------------------
+# SSL/TLS Connections (recommended for production)
+#------------------------------------------------------------------------------
+
+# Force SSL for remote connections (when SSL is configured)
+# Uncomment these and comment out the corresponding 'host' lines above
+# hostssl promptforge_prod    promptforge_app     192.168.1.0/24      scram-sha-256
+# hostssl promptforge_prod    promptforge_readonly 192.168.2.0/24     scram-sha-256
+
+#------------------------------------------------------------------------------
+# Explicit Denials (optional - for defense in depth)
+#------------------------------------------------------------------------------
+
+# Reject connections from specific networks (example)
+# host    all             all                 10.0.0.0/8              reject
+
+# Reject all other connections (default deny - UNCOMMENT FOR STRICT SECURITY)
+# host    all             all                 0.0.0.0/0               reject
+# host    all             all                 ::0/0                   reject
+
+################################################################################
+# SECURITY NOTES
+################################################################################
+#
+# 1. Order matters! PostgreSQL uses the first matching rule.
+#
+# 2. Use 'scram-sha-256' for password authentication (most secure).
+#    Avoid 'md5' (legacy) and never use 'trust' in production.
+#
+# 3. Be as specific as possible with IP addresses/networks.
+#    Avoid 0.0.0.0/0 (all IPv4) or ::0/0 (all IPv6) in production.
+#
+# 4. Use SSL/TLS (hostssl) for all remote connections when possible.
+#
+# 5. Use separate users with minimal privileges:
+#    - Application: read/write access to application database only
+#    - Read-only: SELECT access for reporting/analytics
+#    - Backup: SELECT access for backups
+#
+# 6. Use 'peer' authentication for local admin connections (secure).
+#
+# 7. Regularly review and audit this file.
+#
+# 8. After changes, reload PostgreSQL:
+#    sudo systemctl reload postgresql
+#    or: SELECT pg_reload_conf();
+#
+# 9. Test connections after changes:
+#    psql -h hostname -U username -d database
+#
+# 10. Monitor failed connection attempts in logs.
+#
+################################################################################
+
+################################################################################
+# COMMON NETWORK RANGES
+################################################################################
+#
+# Private IPv4 networks (RFC 1918):
+#   10.0.0.0/8        (10.0.0.0 - 10.255.255.255)
+#   172.16.0.0/12     (172.16.0.0 - 172.31.255.255)
+#   192.168.0.0/16    (192.168.0.0 - 192.168.255.255)
+#
+# Docker default networks:
+#   172.17.0.0/16     (default bridge)
+#   172.18.0.0/16     (user-defined bridge)
+#
+# Localhost:
+#   127.0.0.1/32      (IPv4 localhost)
+#   ::1/128           (IPv6 localhost)
+#
+# Allow all:
+#   0.0.0.0/0         (all IPv4)
+#   ::0/0             (all IPv6)
+#
+################################################################################
+
+################################################################################
+# TESTING YOUR CONFIGURATION
+################################################################################
+#
+# After editing this file, test your configuration:
+#
+# 1. Check syntax (as postgres user):
+#    pg_hba.conf -c -f /etc/postgresql/*/main/pg_hba.conf
+#
+# 2. Reload PostgreSQL:
+#    sudo systemctl reload postgresql
+#    or: psql -U postgres -c "SELECT pg_reload_conf();"
+#
+# 3. Test connections:
+#    # Local connection
+#    psql -U promptforge_app -d promptforge_prod
+#
+#    # Remote connection
+#    psql -h server_ip -U promptforge_app -d promptforge_prod
+#
+# 4. Check logs for authentication failures:
+#    sudo tail -f /var/log/postgresql/postgresql-*-main.log
+#
+# 5. View current connections:
+#    psql -U postgres -c "SELECT * FROM pg_stat_activity;"
+#
+################################################################################
