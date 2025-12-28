@@ -160,7 +160,7 @@ export function trackPageLoad(): void {
           tcp: perfData.connectEnd - perfData.connectStart,
           request: perfData.responseStart - perfData.requestStart,
           response: perfData.responseEnd - perfData.responseStart,
-          domProcessing: perfData.domComplete - perfData.domLoading,
+          domProcessing: perfData.domComplete - perfData.domInteractive,
           domContentLoaded: perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart,
           loadComplete: perfData.loadEventEnd - perfData.loadEventStart,
           totalTime: perfData.loadEventEnd - perfData.fetchStart,
@@ -223,7 +223,7 @@ export function getPerformanceReport(): void {
       'TCP Connection': `${(perfData.connectEnd - perfData.connectStart).toFixed(2)}ms`,
       'Request Time': `${(perfData.responseStart - perfData.requestStart).toFixed(2)}ms`,
       'Response Time': `${(perfData.responseEnd - perfData.responseStart).toFixed(2)}ms`,
-      'DOM Processing': `${(perfData.domComplete - perfData.domLoading).toFixed(2)}ms`,
+      'DOM Processing': `${(perfData.domComplete - perfData.domInteractive).toFixed(2)}ms`,
       'Load Event': `${(perfData.loadEventEnd - perfData.loadEventStart).toFixed(2)}ms`,
       'Total Time': `${(perfData.loadEventEnd - perfData.fetchStart).toFixed(2)}ms`,
     };
