@@ -54,6 +54,20 @@ except ImportError:
     if LOGGING_AVAILABLE:
         logger.warning("Sentry error tracking not available")
 
+try:
+    from app.core.security_middleware import (
+        RateLimitMiddleware,
+        RequestSizeLimitMiddleware,
+        SecurityHeadersMiddleware,
+        CSRFProtectionMiddleware,
+        HTTPSRedirectMiddleware
+    )
+    SECURITY_MIDDLEWARE_AVAILABLE = True
+except ImportError:
+    SECURITY_MIDDLEWARE_AVAILABLE = False
+    if LOGGING_AVAILABLE:
+        logger.warning("Security middleware not available")
+
 # Initialize structured logging if available
 if LOGGING_AVAILABLE:
     setup_logging()
@@ -110,7 +124,30 @@ if METRICS_AVAILABLE and settings.ENABLE_METRICS:
     app.add_middleware(MetricsMiddleware)
     logger.info("Prometheus metrics middleware enabled")
 
-# Security Middleware - Trust only specific hosts in production
+# Security Middleware
+if SECURITY_MIDDLEWARE_AVAILABLE:
+    # HTTPS redirect (must be first)
+    app.add_middleware(HTTPSRedirectMiddleware)
+
+    # Security headers
+    app.add_middleware(SecurityHeadersMiddleware)
+    logger.info("Security headers middleware enabled")
+
+    # CSRF protection
+    if settings.ENABLE_CSRF_PROTECTION:
+        app.add_middleware(CSRFProtectionMiddleware)
+        logger.info("CSRF protection middleware enabled")
+
+    # Request size limits
+    app.add_middleware(RequestSizeLimitMiddleware)
+    logger.info(f"Request size limit middleware enabled (max: {settings.MAX_REQUEST_SIZE} bytes)")
+
+    # Rate limiting
+    if settings.RATE_LIMIT_ENABLED:
+        app.add_middleware(RateLimitMiddleware)
+        logger.info(f"Rate limiting middleware enabled ({settings.RATE_LIMIT_PER_MINUTE} req/min)")
+
+# Trust only specific hosts in production
 if settings.ENVIRONMENT == "production":
     allowed_hosts = getattr(settings, 'ALLOWED_HOSTS', ["*"])
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
@@ -126,14 +163,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-CSRF-Token"],  # Allow frontend to read CSRF token
 )
 logger.info(f"CORS enabled for origins: {settings.CORS_ORIGINS}")
 
 
 # Request timing and logging middleware
 @app.middleware("http")
-async def add_security_headers_and_logging(request: Request, call_next):
-    """Add security headers and log requests"""
+async def add_request_timing_and_logging(request: Request, call_next):
+    """Add request timing and log requests"""
     start_time = time.time()
 
     # Process request
@@ -142,14 +180,8 @@ async def add_security_headers_and_logging(request: Request, call_next):
     # Calculate processing time
     process_time = time.time() - start_time
 
-    # Add custom headers
+    # Add timing header
     response.headers["X-Process-Time"] = str(process_time)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-
-    if settings.ENVIRONMENT == "production":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
     # Log request with structured logging
     logger.info(

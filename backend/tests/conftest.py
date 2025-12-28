@@ -102,7 +102,7 @@ def test_user_data() -> Dict[str, str]:
     return {
         "email": "test@example.com",
         "username": "testuser",
-        "password": "testpassword123",
+        "password": "TestPassword123!",  # Strong password with uppercase, lowercase, digits, and special char
         "full_name": "Test User"
     }
 
@@ -121,7 +121,7 @@ def test_user2_data() -> Dict[str, str]:
     return {
         "email": "test2@example.com",
         "username": "testuser2",
-        "password": "testpassword456",
+        "password": "TestPassword456!",  # Strong password with uppercase, lowercase, digits, and special char
         "full_name": "Test User Two"
     }
 

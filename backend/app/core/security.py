@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta
 from typing import Optional
+import re
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use bcrypt with strong work factor (12 rounds is default, secure)
+# Bcrypt automatically salts passwords and is resistant to rainbow table attacks
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -37,3 +40,113 @@ def decode_access_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+
+def validate_password_strength(password: str) -> tuple[bool, Optional[str]]:
+    """
+    Validate password meets security requirements
+    Returns (is_valid, error_message)
+    """
+    if len(password) < settings.MIN_PASSWORD_LENGTH:
+        return False, f"Password must be at least {settings.MIN_PASSWORD_LENGTH} characters long"
+
+    if settings.REQUIRE_PASSWORD_UPPERCASE and not re.search(r"[A-Z]", password):
+        return False, "Password must contain at least one uppercase letter"
+
+    if settings.REQUIRE_PASSWORD_LOWERCASE and not re.search(r"[a-z]", password):
+        return False, "Password must contain at least one lowercase letter"
+
+    if settings.REQUIRE_PASSWORD_DIGITS and not re.search(r"\d", password):
+        return False, "Password must contain at least one digit"
+
+    if settings.REQUIRE_PASSWORD_SPECIAL and not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False, "Password must contain at least one special character"
+
+    # Check for common weak passwords
+    common_passwords = ["password", "12345678", "qwerty", "abc123", "password123"]
+    if password.lower() in common_passwords:
+        return False, "Password is too common. Please choose a stronger password"
+
+    return True, None
+
+
+def sanitize_input(text: str, allow_html: bool = False) -> str:
+    """
+    Sanitize user input to prevent XSS attacks
+
+    Args:
+        text: Input text to sanitize
+        allow_html: If True, allows safe HTML tags (using bleach)
+
+    Returns:
+        Sanitized text safe for storage and display
+    """
+    if not text:
+        return text
+
+    try:
+        import bleach
+
+        if allow_html:
+            # Allow only safe HTML tags
+            allowed_tags = ['p', 'br', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'code', 'pre']
+            allowed_attributes = {'a': ['href', 'title']}
+            return bleach.clean(text, tags=allowed_tags, attributes=allowed_attributes, strip=True)
+        else:
+            # Strip all HTML tags
+            return bleach.clean(text, tags=[], strip=True)
+    except ImportError:
+        # Fallback if bleach not available - basic HTML escape
+        return (text
+                .replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+                .replace("'", '&#x27;'))
+
+
+def sanitize_sql_identifier(identifier: str) -> str:
+    """
+    Sanitize SQL identifiers (table/column names) to prevent SQL injection
+    Note: SQLAlchemy ORM already protects against SQL injection in queries,
+    but this is useful for dynamic table/column names if ever needed
+
+    Args:
+        identifier: SQL identifier (table or column name)
+
+    Returns:
+        Sanitized identifier safe for SQL queries
+    """
+    # Only allow alphanumeric characters and underscores
+    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", identifier):
+        raise ValueError(f"Invalid SQL identifier: {identifier}")
+    return identifier
+
+
+def validate_email(email: str) -> bool:
+    """
+    Validate email format
+
+    Args:
+        email: Email address to validate
+
+    Returns:
+        True if valid email format
+    """
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(email_pattern, email))
+
+
+def generate_secure_token(length: int = 32) -> str:
+    """
+    Generate a cryptographically secure random token
+    Useful for API keys, reset tokens, etc.
+
+    Args:
+        length: Length of the token (default 32 bytes = 256 bits)
+
+    Returns:
+        URL-safe token string
+    """
+    import secrets
+    return secrets.token_urlsafe(length)

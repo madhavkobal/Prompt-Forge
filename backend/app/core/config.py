@@ -13,6 +13,27 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # Rate Limiting
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_PER_MINUTE: int = 60
+    RATE_LIMIT_BURST: int = 10
+
+    # Request Security
+    MAX_REQUEST_SIZE: int = 10 * 1024 * 1024  # 10MB
+    ENABLE_CSRF_PROTECTION: bool = True
+    CSRF_SECRET_KEY: Optional[str] = None
+
+    # Security Headers
+    ENABLE_SECURITY_HEADERS: bool = True
+    ALLOWED_HOSTS: List[str] = ["*"]
+
+    # Password Policy
+    MIN_PASSWORD_LENGTH: int = 8
+    REQUIRE_PASSWORD_UPPERCASE: bool = True
+    REQUIRE_PASSWORD_LOWERCASE: bool = True
+    REQUIRE_PASSWORD_DIGITS: bool = True
+    REQUIRE_PASSWORD_SPECIAL: bool = True
+
     # Database
     DATABASE_URL: str
 
