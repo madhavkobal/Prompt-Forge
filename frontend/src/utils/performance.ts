@@ -9,8 +9,9 @@
  * - TTFB (Time to First Byte)
  */
 
-import { onCLS, onFID, onFCP, onLCP, onTTFB, Metric } from 'web-vitals';
-import config from '@/config/env';
+import { onCLS, onFID, onFCP, onLCP, onTTFB } from 'web-vitals';
+import type { Metric } from 'web-vitals';
+import { config } from '@/config/env';
 
 interface PerformanceMetric {
   name: string;
