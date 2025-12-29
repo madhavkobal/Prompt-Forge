@@ -38,7 +38,7 @@
 #
 # Author: PromptForge Team
 # License: MIT
-# Version: 1.0.2
+# Version: 1.0.3
 #
 ################################################################################
 
@@ -474,11 +474,6 @@ RATE_LIMIT_PER_MINUTE=60
 
 # Logging
 LOG_LEVEL=$([ "$PRODUCTION" = true ] && echo "INFO" || echo "DEBUG")
-
-# Server
-HOST=0.0.0.0
-PORT=8000
-WORKERS=$([ "$PRODUCTION" = true ] && echo "4" || echo "1")
 EOF
 
 chmod 600 .env
