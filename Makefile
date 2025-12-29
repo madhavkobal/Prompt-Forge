@@ -174,6 +174,53 @@ dev-logs: ## Show development logs
 dev-stop: ## Stop development environment
 	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
 
+dev-local: ## Start local development (without Docker)
+	@echo "$(BLUE)[INFO]$(NC) Starting local development..."
+	@echo "Backend: http://localhost:8000"
+	@echo "Frontend: http://localhost:5173"
+	@(cd backend && source venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000) & \
+	(cd frontend && npm run dev)
+
+install-local: ## Install local dependencies
+	@echo "$(BLUE)[INFO]$(NC) Installing backend dependencies..."
+	@cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+	@echo "$(BLUE)[INFO]$(NC) Installing frontend dependencies..."
+	@cd frontend && npm install
+	@echo "$(GREEN)[SUCCESS]$(NC) Local dependencies installed!"
+
+test-local: ## Run local tests (backend + frontend)
+	@echo "$(BLUE)[INFO]$(NC) Running backend tests..."
+	@cd backend && source venv/bin/activate && pytest -v --cov=app --cov-report=term-missing
+	@echo "$(BLUE)[INFO]$(NC) Running frontend tests..."
+	@cd frontend && npm run test || echo "$(YELLOW)[WARNING]$(NC) Frontend tests not configured"
+	@echo "$(GREEN)[SUCCESS]$(NC) Tests completed!"
+
+test-backend-local: ## Run backend tests locally
+	@cd backend && source venv/bin/activate && pytest -v --cov=app --cov-report=term-missing --cov-report=html
+
+lint-local: ## Run linters locally
+	@echo "$(BLUE)[INFO]$(NC) Linting backend..."
+	@cd backend && source venv/bin/activate && flake8 app/ || echo "Install flake8: pip install flake8"
+	@echo "$(BLUE)[INFO]$(NC) Linting frontend..."
+	@cd frontend && npm run lint || echo "$(YELLOW)[WARNING]$(NC) Frontend linting not configured"
+	@echo "$(GREEN)[SUCCESS]$(NC) Linting completed!"
+
+format-local: ## Format code locally
+	@echo "$(BLUE)[INFO]$(NC) Formatting backend code..."
+	@cd backend && source venv/bin/activate && black app/ || echo "Install black: pip install black"
+	@echo "$(BLUE)[INFO]$(NC) Formatting frontend code..."
+	@cd frontend && npm run format || echo "$(YELLOW)[INFO]$(NC) Add 'format' script to package.json"
+	@echo "$(GREEN)[SUCCESS]$(NC) Code formatted!"
+
+clean-local: ## Clean local build artifacts
+	@echo "$(BLUE)[INFO]$(NC) Cleaning build artifacts..."
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@cd frontend && rm -rf dist/ .vite/ 2>/dev/null || true
+	@echo "$(GREEN)[SUCCESS]$(NC) Cleanup completed!"
+
 ##@ Testing
 
 test: ## Run tests

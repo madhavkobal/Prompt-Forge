@@ -92,6 +92,28 @@ if SENTRY_AVAILABLE and settings.SENTRY_DSN:
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
+    # Validate security configuration in production
+    if settings.ENVIRONMENT == "production":
+        # Validate SECRET_KEY
+        insecure_keys = [
+            "your-secret-key-change-in-production",
+            "change-me",
+            "secret",
+            "dev-secret-key",
+        ]
+        if settings.SECRET_KEY in insecure_keys or len(settings.SECRET_KEY) < 32:
+            raise RuntimeError(
+                "CRITICAL SECURITY ERROR: SECRET_KEY must be set to a secure random value in production. "
+                "It must be at least 32 characters long and not use default values."
+            )
+
+        # Validate CORS_ORIGINS
+        if "*" in settings.CORS_ORIGINS:
+            raise RuntimeError(
+                "CRITICAL SECURITY ERROR: CORS_ORIGINS cannot contain '*' in production. "
+                "Specify explicit allowed origins."
+            )
+
     logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
 
