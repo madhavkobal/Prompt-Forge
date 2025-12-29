@@ -1,0 +1,72 @@
+# PromptForge Backup Cron Jobs
+#
+# This file contains cron job definitions for automated backups.
+#
+# Installation:
+#   1. Copy this file to /etc/cron.d/promptforge-backup
+#   2. Ensure proper permissions: chmod 644 /etc/cron.d/promptforge-backup
+#   3. Restart cron: systemctl restart cron
+#
+# Or install using:
+#   sudo cp promptforge-backup.cron /etc/cron.d/promptforge-backup
+#
+# Note: Update paths to match your installation directory
+#
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=admin@promptforge.io
+
+# PromptForge installation directory
+PROMPTFORGE_DIR=/opt/promptforge
+
+################################################################################
+# Daily Database Backup (1 AM every day)
+################################################################################
+
+0 1 * * * root cd $PROMPTFORGE_DIR && ./backup/scripts/backup-db.sh --encrypt --offsite >> /var/log/promptforge/backup-db.log 2>&1
+
+################################################################################
+# Weekly Full System Backup (2 AM every Sunday)
+################################################################################
+
+0 2 * * 0 root cd $PROMPTFORGE_DIR && ./backup/scripts/backup-full.sh --encrypt --offsite >> /var/log/promptforge/backup-full.log 2>&1
+
+################################################################################
+# Daily Backup Verification (3 AM every day)
+################################################################################
+
+0 3 * * * root cd $PROMPTFORGE_DIR && ./backup/scripts/backup-verify.sh --skip-db-test /var/backups/promptforge/database/$(ls -t /var/backups/promptforge/database | head -1) >> /var/log/promptforge/backup-verify.log 2>&1
+
+################################################################################
+# Weekly Full Backup Verification (4 AM every Monday)
+################################################################################
+
+0 4 * * 1 root cd $PROMPTFORGE_DIR && ./backup/scripts/backup-verify.sh /var/backups/promptforge/full/$(ls -t /var/backups/promptforge/full | head -1) >> /var/log/promptforge/backup-verify.log 2>&1
+
+################################################################################
+# Monthly Test Restore (4 AM first Sunday of month)
+################################################################################
+
+0 4 1-7 * 0 root cd $PROMPTFORGE_DIR && ./backup/scripts/backup-verify.sh --test-restore /var/backups/promptforge/database/$(ls -t /var/backups/promptforge/database | head -1) >> /var/log/promptforge/backup-test.log 2>&1
+
+################################################################################
+# Cleanup Old Backups (5 AM every day)
+################################################################################
+
+# This is handled by the backup scripts themselves via retention policy
+# But you can add manual cleanup here if needed:
+# 0 5 * * * root find /var/backups/promptforge/database -type d -mtime +30 -exec rm -rf {} \;
+# 0 5 * * * root find /var/backups/promptforge/full -type d -mtime +30 -exec rm -rf {} \;
+
+################################################################################
+# Disk Space Monitoring (every 6 hours)
+################################################################################
+
+0 */6 * * * root df -h /var/backups/promptforge | tail -1 | awk '{if (int($5) > 90) print "WARNING: Backup disk usage is " $5}' | mail -s "PromptForge Backup Disk Space Warning" admin@promptforge.io
+
+################################################################################
+# Database Health Check (every hour)
+################################################################################
+
+0 * * * * root cd $PROMPTFORGE_DIR && ./database/scripts/monitor-database.sh --quick >> /var/log/promptforge/db-monitor.log 2>&1
