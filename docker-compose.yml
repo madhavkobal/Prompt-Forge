@@ -32,6 +32,7 @@ services:
       DATABASE_URL: postgresql://promptforge:promptforge_dev_password@postgres:5432/promptforge
       SECRET_KEY: your-secret-key-change-in-production
       GEMINI_API_KEY: ${GEMINI_API_KEY:-your-gemini-api-key-here}
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://21.0.0.154:5173"]'
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,14 +42,14 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: promptforge_frontend
-    command: npm run dev
+    command: npm run dev -- --host
     volumes:
       - ./frontend:/app
       - /app/node_modules
     ports:
       - "5173:5173"
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_URL: ${VITE_API_URL:-http://21.0.0.154:8000}
     depends_on:
       - backend
 
