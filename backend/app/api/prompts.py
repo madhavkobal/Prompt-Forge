@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
+from app.core.exceptions import AnalysisUnavailableException, EnhancementUnavailableException
 from app.api.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.prompt import Prompt as PromptModel, PromptVersion as PromptVersionModel
@@ -199,19 +200,29 @@ def analyze_prompt(
         raise HTTPException(status_code=404, detail="Prompt not found")
 
     # Analyze with Gemini
-    analysis = gemini_service.analyze_prompt(prompt.content, prompt.target_llm)
+    try:
+        analysis = gemini_service.analyze_prompt(prompt.content, prompt.target_llm)
 
-    # Update prompt with analysis results
-    prompt.quality_score = analysis.quality_score
-    prompt.clarity_score = analysis.clarity_score
-    prompt.specificity_score = analysis.specificity_score
-    prompt.structure_score = analysis.structure_score
-    prompt.suggestions = analysis.suggestions
-    prompt.best_practices = analysis.best_practices
+        # Update prompt with analysis results
+        prompt.quality_score = analysis.quality_score
+        prompt.clarity_score = analysis.clarity_score
+        prompt.specificity_score = analysis.specificity_score
+        prompt.structure_score = analysis.structure_score
+        prompt.suggestions = analysis.suggestions
+        prompt.best_practices = analysis.best_practices
 
-    db.commit()
+        db.commit()
 
-    return analysis
+        return analysis
+    except AnalysisUnavailableException as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "service_unavailable",
+                "message": e.message,
+                "details": e.details
+            }
+        )
 
 
 @router.post("/{prompt_id}/enhance", response_model=PromptEnhancement)
@@ -233,14 +244,24 @@ def enhance_prompt(
         raise HTTPException(status_code=404, detail="Prompt not found")
 
     # Enhance with Gemini
-    enhancement = gemini_service.enhance_prompt(prompt.content, prompt.target_llm)
+    try:
+        enhancement = gemini_service.enhance_prompt(prompt.content, prompt.target_llm)
 
-    # Update prompt with enhanced content
-    prompt.enhanced_content = enhancement.enhanced_content
+        # Update prompt with enhanced content
+        prompt.enhanced_content = enhancement.enhanced_content
 
-    db.commit()
+        db.commit()
 
-    return enhancement
+        return enhancement
+    except EnhancementUnavailableException as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "service_unavailable",
+                "message": e.message,
+                "details": e.details
+            }
+        )
 
 
 @router.get("/{prompt_id}/versions", response_model=List[PromptVersion])

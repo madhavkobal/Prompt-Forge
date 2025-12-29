@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
 from app.core.database import get_db
+from app.core.exceptions import AnalysisUnavailableException, EnhancementUnavailableException
 from app.api.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.prompt import Prompt as PromptModel
@@ -43,19 +44,29 @@ def generate_enhanced_versions(
         raise HTTPException(status_code=404, detail="Prompt not found")
 
     # Generate versions
-    gemini_service = GeminiService()
-    versions = gemini_service.generate_prompt_versions(
-        prompt.content,
-        prompt.target_llm,
-        num_versions
-    )
+    try:
+        gemini_service = GeminiService()
+        versions = gemini_service.generate_prompt_versions(
+            prompt.content,
+            prompt.target_llm,
+            num_versions
+        )
 
-    return {
-        "original_prompt": prompt.content,
-        "target_llm": prompt.target_llm,
-        "versions": versions,
-        "count": len(versions)
-    }
+        return {
+            "original_prompt": prompt.content,
+            "target_llm": prompt.target_llm,
+            "versions": versions,
+            "count": len(versions)
+        }
+    except EnhancementUnavailableException as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "service_unavailable",
+                "message": e.message,
+                "details": e.details
+            }
+        )
 
 
 @router.post("/prompt/{prompt_id}/ambiguities")
@@ -86,15 +97,25 @@ def detect_ambiguities(
         raise HTTPException(status_code=404, detail="Prompt not found")
 
     # Detect ambiguities
-    gemini_service = GeminiService()
-    ambiguities = gemini_service.detect_ambiguities(prompt.content)
+    try:
+        gemini_service = GeminiService()
+        ambiguities = gemini_service.detect_ambiguities(prompt.content)
 
-    return {
-        "prompt_id": prompt_id,
-        "ambiguities": ambiguities,
-        "count": len(ambiguities),
-        "has_ambiguities": len(ambiguities) > 0
-    }
+        return {
+            "prompt_id": prompt_id,
+            "ambiguities": ambiguities,
+            "count": len(ambiguities),
+            "has_ambiguities": len(ambiguities) > 0
+        }
+    except AnalysisUnavailableException as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "service_unavailable",
+                "message": e.message,
+                "details": e.details
+            }
+        )
 
 
 @router.get("/prompt/{prompt_id}/best-practices")

@@ -4,6 +4,15 @@ import json
 import re
 import time
 from app.core.config import settings
+from app.core.exceptions import AnalysisUnavailableException, EnhancementUnavailableException
+from app.config.system_prompts import (
+    get_analysis_prompt,
+    get_enhancement_prompt,
+    get_versions_prompt,
+    get_ambiguity_prompt,
+    get_best_practices,
+    BEST_PRACTICES_MAP,
+)
 from app.schemas.prompt import PromptAnalysis, PromptEnhancement
 
 # Configure Gemini API
@@ -83,53 +92,20 @@ class GeminiService:
 
         Returns:
             PromptAnalysis with scores and detailed feedback
+
+        Raises:
+            AnalysisUnavailableException: If analysis service fails
         """
-        analysis_prompt = f"""
-You are an expert prompt engineer. Analyze the following prompt for quality and provide detailed feedback.
-
-Target LLM: {target_llm or 'General AI Assistant'}
-
-Prompt to analyze:
-\"\"\"
-{content}
-\"\"\"
-
-Provide a comprehensive analysis evaluating:
-
-1. **Clarity Score (0-100)**: How clear and understandable is the prompt?
-2. **Specificity Score (0-100)**: How specific and detailed are the requirements?
-3. **Structure Score (0-100)**: How well-organized and structured is the prompt?
-4. **Context Completeness**: Does the prompt provide sufficient context and background?
-5. **Ambiguity Detection**: Identify any ambiguous or unclear parts
-
-Calculate an overall quality score based on these dimensions.
-
-Respond in STRICT JSON format (no markdown, no extra text):
-{{
-    "quality_score": <0-100>,
-    "clarity_score": <0-100>,
-    "specificity_score": <0-100>,
-    "structure_score": <0-100>,
-    "strengths": ["specific strength 1", "specific strength 2", "..."],
-    "weaknesses": ["specific weakness 1", "specific weakness 2", "..."],
-    "suggestions": ["actionable suggestion 1", "actionable suggestion 2", "..."],
-    "best_practices": {{
-        "context": "evaluation of context completeness (good/fair/poor)",
-        "role_definition": "evaluation of role clarity (good/fair/poor)",
-        "output_format": "evaluation of output format specification (good/fair/poor)",
-        "constraints": "evaluation of constraints definition (good/fair/poor)",
-        "ambiguities": ["ambiguous phrase 1", "ambiguous phrase 2", "..."]
-    }}
-}}
-"""
+        analysis_prompt = get_analysis_prompt(content, target_llm)
 
         try:
             response_text = self._make_request_with_retry(analysis_prompt)
             result = self._parse_analysis_response(response_text)
             return PromptAnalysis(**result)
         except Exception as e:
-            print(f"Error in analyze_prompt: {e}")
-            return self._fallback_analysis(content)
+            error_msg = str(e)
+            print(f"Error in analyze_prompt: {error_msg}")
+            raise AnalysisUnavailableException(details=error_msg)
 
     def enhance_prompt(self, content: str, target_llm: Optional[str] = None) -> PromptEnhancement:
         """
@@ -141,39 +117,20 @@ Respond in STRICT JSON format (no markdown, no extra text):
 
         Returns:
             PromptEnhancement with 2-3 improved versions and explanations
+
+        Raises:
+            EnhancementUnavailableException: If enhancement service fails
         """
-        enhancement_prompt = f"""
-You are an expert prompt engineer. Enhance the following prompt for {target_llm or 'AI language models'}.
-
-Original prompt:
-\"\"\"
-{content}
-\"\"\"
-
-Create an improved version that:
-1. Adds necessary context and background
-2. Makes requirements more specific and clear
-3. Structures the prompt better
-4. Removes ambiguities
-5. Follows best practices for {target_llm or 'AI assistants'}
-
-Maintain the original intent but make it significantly more effective.
-
-Respond in STRICT JSON format (no markdown, no extra text):
-{{
-    "enhanced_content": "the single best improved version of the prompt",
-    "improvements": ["specific improvement 1", "specific improvement 2", "..."],
-    "quality_improvement": <estimated percentage improvement as number>
-}}
-"""
+        enhancement_prompt = get_enhancement_prompt(content, target_llm)
 
         try:
             response_text = self._make_request_with_retry(enhancement_prompt)
             result = self._parse_enhancement_response(response_text, content)
             return PromptEnhancement(**result)
         except Exception as e:
-            print(f"Error in enhance_prompt: {e}")
-            return self._fallback_enhancement(content)
+            error_msg = str(e)
+            print(f"Error in enhance_prompt: {error_msg}")
+            raise EnhancementUnavailableException(details=error_msg)
 
     def generate_prompt_versions(
         self,
@@ -191,55 +148,20 @@ Respond in STRICT JSON format (no markdown, no extra text):
 
         Returns:
             List of enhanced prompt versions with explanations
+
+        Raises:
+            EnhancementUnavailableException: If version generation fails
         """
-        versions_prompt = f"""
-You are an expert prompt engineer. Create {num_versions} different enhanced versions of the following prompt for {target_llm or 'AI language models'}.
-
-Original prompt:
-\"\"\"
-{content}
-\"\"\"
-
-Each version should take a different approach:
-- Version 1: Focus on clarity and structure
-- Version 2: Focus on specificity and detail
-- Version 3: Focus on context and examples
-
-Respond in STRICT JSON format (no markdown, no extra text):
-{{
-    "versions": [
-        {{
-            "version_number": 1,
-            "title": "Clear & Structured",
-            "enhanced_content": "enhanced prompt version 1",
-            "improvements": ["improvement 1", "improvement 2", "..."],
-            "focus": "clarity and structure"
-        }},
-        {{
-            "version_number": 2,
-            "title": "Specific & Detailed",
-            "enhanced_content": "enhanced prompt version 2",
-            "improvements": ["improvement 1", "improvement 2", "..."],
-            "focus": "specificity and detail"
-        }},
-        {{
-            "version_number": 3,
-            "title": "Context-Rich",
-            "enhanced_content": "enhanced prompt version 3",
-            "improvements": ["improvement 1", "improvement 2", "..."],
-            "focus": "context and examples"
-        }}
-    ]
-}}
-"""
+        versions_prompt = get_versions_prompt(content, target_llm, num_versions)
 
         try:
             response_text = self._make_request_with_retry(versions_prompt)
             result = self._parse_json_response(response_text)
             return result.get("versions", [])
         except Exception as e:
-            print(f"Error in generate_prompt_versions: {e}")
-            return self._fallback_versions(content, num_versions)
+            error_msg = str(e)
+            print(f"Error in generate_prompt_versions: {error_msg}")
+            raise EnhancementUnavailableException(details=error_msg)
 
     def detect_ambiguities(self, content: str) -> List[Dict[str, str]]:
         """
@@ -250,78 +172,24 @@ Respond in STRICT JSON format (no markdown, no extra text):
 
         Returns:
             List of detected ambiguities with suggestions
+
+        Raises:
+            AnalysisUnavailableException: If ambiguity detection fails
         """
-        ambiguity_prompt = f"""
-You are an expert prompt analyst. Identify all ambiguous, unclear, or potentially confusing parts in this prompt:
-
-\"\"\"
-{content}
-\"\"\"
-
-For each ambiguity found, specify:
-- The ambiguous phrase or section
-- Why it's ambiguous
-- How to clarify it
-
-Respond in STRICT JSON format (no markdown, no extra text):
-{{
-    "ambiguities": [
-        {{
-            "phrase": "the ambiguous phrase",
-            "reason": "why it's ambiguous",
-            "suggestion": "how to clarify it"
-        }}
-    ]
-}}
-"""
+        ambiguity_prompt = get_ambiguity_prompt(content)
 
         try:
             response_text = self._make_request_with_retry(ambiguity_prompt)
             result = self._parse_json_response(response_text)
             return result.get("ambiguities", [])
         except Exception as e:
-            print(f"Error in detect_ambiguities: {e}")
-            return []
+            error_msg = str(e)
+            print(f"Error in detect_ambiguities: {error_msg}")
+            raise AnalysisUnavailableException(details=error_msg)
 
     def check_best_practices(self, content: str, target_llm: str) -> Dict[str, Any]:
         """Check prompt against LLM-specific best practices"""
-        best_practices_map = {
-            "ChatGPT": [
-                "Use clear role definitions (e.g., 'You are an expert...')",
-                "Provide context and background information",
-                "Specify desired output format explicitly",
-                "Break complex tasks into numbered steps",
-                "Include examples when helpful",
-            ],
-            "Claude": [
-                "Structure with XML tags for complex prompts",
-                "Be explicit about constraints and requirements",
-                "Use chain-of-thought prompting for reasoning",
-                "Provide clear success criteria",
-                "Leverage Claude's analytical and writing strengths",
-            ],
-            "Gemini": [
-                "Leverage multimodal capabilities when applicable",
-                "Use structured output formats (JSON, tables)",
-                "Provide clear context upfront",
-                "Specify reasoning and thinking requirements",
-                "Use iterative refinement approach",
-            ],
-            "Grok": [
-                "Be direct and specific in requests",
-                "Leverage real-time knowledge when needed",
-                "Use clear formatting and structure",
-                "Provide explicit, actionable instructions",
-            ],
-            "DeepSeek": [
-                "Focus on reasoning and analytical tasks",
-                "Provide step-by-step guidance for complex problems",
-                "Use clear problem structure and definitions",
-                "Leverage mathematical and logical capabilities",
-            ],
-        }
-
-        practices = best_practices_map.get(target_llm, best_practices_map["ChatGPT"])
+        practices = get_best_practices(target_llm)
 
         compliance_check = {
             "target_llm": target_llm,
@@ -366,106 +234,51 @@ Respond in STRICT JSON format (no markdown, no extra text):
             raise
 
     def _parse_analysis_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse Gemini response for analysis"""
-        try:
-            result = self._parse_json_response(response_text)
+        """
+        Parse Gemini response for analysis
 
-            # Ensure all required fields are present
-            required_fields = {
-                "quality_score": 60.0,
-                "clarity_score": 60.0,
-                "specificity_score": 60.0,
-                "structure_score": 60.0,
-                "strengths": ["Prompt provided"],
-                "weaknesses": ["Analysis incomplete"],
-                "suggestions": ["Review prompt"],
-                "best_practices": {}
-            }
+        Raises:
+            Exception: If parsing fails (will be caught and re-raised as AnalysisUnavailableException)
+        """
+        result = self._parse_json_response(response_text)
 
-            for field, default in required_fields.items():
-                if field not in result:
-                    result[field] = default
+        # Ensure all required fields are present with reasonable defaults
+        required_fields = {
+            "quality_score": 0.0,
+            "clarity_score": 0.0,
+            "specificity_score": 0.0,
+            "structure_score": 0.0,
+            "strengths": [],
+            "weaknesses": [],
+            "suggestions": [],
+            "best_practices": {}
+        }
 
-            return result
-        except Exception as e:
-            print(f"Error parsing analysis response: {e}")
-            return self._fallback_analysis_dict()
+        for field, default in required_fields.items():
+            if field not in result:
+                result[field] = default
+
+        return result
 
     def _parse_enhancement_response(self, response_text: str, original: str) -> Dict[str, Any]:
-        """Parse Gemini response for enhancement"""
-        try:
-            result = self._parse_json_response(response_text)
-            result["original_content"] = original
+        """
+        Parse Gemini response for enhancement
 
-            # Ensure required fields
-            if "enhanced_content" not in result:
-                result["enhanced_content"] = original
-            if "improvements" not in result:
-                result["improvements"] = []
-            if "quality_improvement" not in result:
-                result["quality_improvement"] = 0.0
+        Raises:
+            Exception: If parsing fails (will be caught and re-raised as EnhancementUnavailableException)
+        """
+        result = self._parse_json_response(response_text)
+        result["original_content"] = original
 
-            return result
-        except Exception as e:
-            print(f"Error parsing enhancement response: {e}")
-            return self._fallback_enhancement_dict(original)
+        # Ensure required fields - if missing, raise exception
+        if "enhanced_content" not in result:
+            raise ValueError("Response missing 'enhanced_content' field")
+        if "improvements" not in result:
+            result["improvements"] = []
+        if "quality_improvement" not in result:
+            result["quality_improvement"] = 0.0
 
-    def _fallback_analysis(self, content: str) -> PromptAnalysis:
-        """Provide fallback analysis if API fails"""
-        return PromptAnalysis(
-            quality_score=60.0,
-            clarity_score=65.0,
-            specificity_score=55.0,
-            structure_score=60.0,
-            strengths=["Prompt provided"],
-            weaknesses=["Analysis service temporarily unavailable"],
-            suggestions=["Try again later for detailed analysis"],
-            best_practices={},
-        )
-
-    def _fallback_analysis_dict(self) -> Dict[str, Any]:
-        """Fallback analysis dictionary"""
-        return {
-            "quality_score": 60.0,
-            "clarity_score": 65.0,
-            "specificity_score": 55.0,
-            "structure_score": 60.0,
-            "strengths": ["Prompt provided"],
-            "weaknesses": ["Could not parse analysis response"],
-            "suggestions": ["Review prompt manually"],
-            "best_practices": {},
-        }
-
-    def _fallback_enhancement(self, content: str) -> PromptEnhancement:
-        """Provide fallback enhancement if API fails"""
-        return PromptEnhancement(
-            original_content=content,
-            enhanced_content=content,
-            improvements=["Enhancement service temporarily unavailable"],
-            quality_improvement=0.0,
-        )
-
-    def _fallback_enhancement_dict(self, content: str) -> Dict[str, Any]:
-        """Fallback enhancement dictionary"""
-        return {
-            "original_content": content,
-            "enhanced_content": content,
-            "improvements": ["Could not generate enhancement"],
-            "quality_improvement": 0.0,
-        }
-
-    def _fallback_versions(self, content: str, num_versions: int) -> List[Dict[str, Any]]:
-        """Fallback versions if API fails"""
-        return [
-            {
-                "version_number": i + 1,
-                "title": f"Version {i + 1}",
-                "enhanced_content": content,
-                "improvements": ["Service temporarily unavailable"],
-                "focus": "unavailable"
-            }
-            for i in range(num_versions)
-        ]
+        return result
 
     def _calculate_compliance(self, content: str, practices: List[str]) -> float:
         """Calculate compliance score with best practices"""
