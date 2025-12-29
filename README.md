@@ -133,7 +133,7 @@ sudo ./install-ubuntu.sh --seed-demo
 ```
 
 The script automatically:
-- ✅ Installs all dependencies (PostgreSQL, Python 3.11, Node.js 20)
+- ✅ Installs all dependencies (PostgreSQL 14-16 auto-detected, Python 3.11, Node.js 20)
 - ✅ Creates and configures the database
 - ✅ Sets up Python virtual environment
 - ✅ Installs all packages (backend + frontend)

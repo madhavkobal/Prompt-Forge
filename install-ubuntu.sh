@@ -1,11 +1,11 @@
 #!/bin/bash
 
 ################################################################################
-# PromptForge Installation Script for Ubuntu 24.04
+# PromptForge Installation Script for Ubuntu
 ################################################################################
 #
 # This script automates the installation and setup of PromptForge on a fresh
-# Ubuntu 24.04 system. It installs all required dependencies, configures the
+# Ubuntu system. It installs all required dependencies, configures the
 # database, sets up environment variables, and prepares the application for
 # first run.
 #
@@ -20,13 +20,13 @@
 #   --help                Show this help message
 #
 # Requirements:
-#   - Ubuntu 24.04 LTS
+#   - Ubuntu 24.04 LTS or Ubuntu 22.04 LTS
 #   - Sudo privileges
 #   - Internet connection
 #
 # What this script does:
 #   1. Verifies system compatibility
-#   2. Installs system dependencies (PostgreSQL, Python, Node.js)
+#   2. Installs system dependencies (PostgreSQL 14-16, Python 3.11, Node.js 20)
 #   3. Creates PostgreSQL database and user
 #   4. Sets up Python virtual environment
 #   5. Installs backend Python dependencies
@@ -38,7 +38,7 @@
 #
 # Author: PromptForge Team
 # License: MIT
-# Version: 1.0.0
+# Version: 1.0.1
 #
 ################################################################################
 
@@ -202,10 +202,24 @@ if [ "$SKIP_SYSTEM_DEPS" = false ]; then
         gnupg \
         lsb-release
 
-    # Install PostgreSQL 15
+    # Install PostgreSQL (detect available version)
     # PostgreSQL is our primary database
-    print_info "Installing PostgreSQL 15..."
-    apt-get install -y -qq postgresql-15 postgresql-contrib-15 postgresql-client-15
+    print_info "Installing PostgreSQL..."
+
+    # Detect available PostgreSQL version in repositories
+    # Ubuntu 24.04 has PostgreSQL 16, Ubuntu 22.04 has PostgreSQL 14
+    AVAILABLE_PG_VERSIONS=$(apt-cache search --names-only '^postgresql-[0-9]+$' | grep -oP 'postgresql-\K[0-9]+' | sort -rn)
+
+    if [ -z "$AVAILABLE_PG_VERSIONS" ]; then
+        print_error "No PostgreSQL packages found in repositories"
+        exit 1
+    fi
+
+    # Get the latest available version
+    PG_VERSION=$(echo "$AVAILABLE_PG_VERSIONS" | head -n1)
+    print_info "Installing PostgreSQL $PG_VERSION (latest available)..."
+
+    apt-get install -y -qq postgresql-$PG_VERSION postgresql-contrib-$PG_VERSION postgresql-client-$PG_VERSION
 
     # Install Python 3.11
     # PromptForge requires Python 3.11+ for modern features

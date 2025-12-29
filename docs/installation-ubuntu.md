@@ -145,18 +145,18 @@ The installation script performs these steps automatically:
 ### 2. **System Dependencies Installation** 📦
 
 Installs:
-- PostgreSQL 15 (database server)
+- PostgreSQL (auto-detects latest available: 14-16)
 - Python 3.11 (backend runtime)
 - Node.js 20 (frontend build tools)
 - Build essentials (compilers for native modules)
 - nginx (optional, for production)
 
-**Why:** PromptForge requires these specific versions for compatibility.
+**Why:** PromptForge requires these specific versions for compatibility. PostgreSQL version is automatically detected based on your Ubuntu version (16 for Ubuntu 24.04, 14 for Ubuntu 22.04).
 
 ### 3. **Version Verification** 🔍
 
 Checks installed versions:
-- PostgreSQL 15.x
+- PostgreSQL 14.x - 16.x (depends on Ubuntu version)
 - Python 3.11.x
 - Node.js 20.x
 - npm 10.x
@@ -410,7 +410,9 @@ If you prefer to install manually or the script fails, follow these steps:
 
 ```bash
 sudo apt update
-sudo apt install -y postgresql-15 postgresql-contrib-15
+# Install PostgreSQL (installs the default version for your Ubuntu release)
+# Ubuntu 24.04 → PostgreSQL 16, Ubuntu 22.04 → PostgreSQL 14
+sudo apt install -y postgresql postgresql-contrib
 ```
 
 ### 2. Install Python 3.11
@@ -736,7 +738,7 @@ sudo -u postgres psql -c "DROP DATABASE IF EXISTS promptforge;"
 sudo -u postgres psql -c "DROP USER IF EXISTS promptforge;"
 
 # Remove packages (optional)
-sudo apt remove --purge postgresql-15 python3.11 nodejs
+sudo apt remove --purge postgresql postgresql-contrib python3.11 nodejs
 
 # Remove project files
 rm -rf ~/Prompt-Forge
