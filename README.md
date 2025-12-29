@@ -443,10 +443,9 @@ Prompt-Forge/
 ├── docker-compose.yml           # Docker Compose orchestration
 ├── .gitignore                   # Git ignore rules
 ├── README.md                    # This file
-├── API_ENDPOINTS.md            # API documentation
-├── BACKEND_COMPLETION_SUMMARY.md
-├── ENHANCED_EDITOR_SUMMARY.md
-└── SETUP_GUIDE.md              # Detailed setup instructions
+├── CONTRIBUTING.md              # Contribution guidelines
+├── SECURITY.md                  # Security policy
+└── docs/                        # Documentation (see below)
 ```
 
 ---
@@ -489,7 +488,7 @@ Once the backend is running, visit:
 - `GET /api/v1/analysis/prompt/{id}/best-practices` - Check LLM best practices
 - `GET /api/v1/analysis/models` - List available Gemini models
 
-For complete API documentation, see [API_ENDPOINTS.md](API_ENDPOINTS.md)
+For complete API documentation, see [API Endpoints](docs/api/endpoints.md)
 
 ---
 
@@ -796,11 +795,25 @@ taskkill /PID <PID> /F  # Windows
 
 ### Developer Documentation
 - **[API Reference](docs/api-reference.md)** - Complete REST API documentation
+- **[API Endpoints](docs/api/endpoints.md)** - Detailed REST API endpoints
+- **[Gemini Service Guide](docs/api/gemini-service-guide.md)** - AI service integration guide
 - **[Architecture](docs/architecture.md)** - System architecture and design
 - **[Development Guide](docs/development.md)** - Local development setup
 - **[Contributing](docs/contributing.md)** - Contribution guidelines
 
+### Setup & Installation
+- **[Setup Guide](docs/setup/setup-guide.md)** - Complete setup instructions
+- **[Backend Setup](docs/setup/backend-setup.md)** - Backend-specific setup guide
+- **[Installation on Ubuntu](docs/installation-ubuntu.md)** - Ubuntu automated installation
+
+### Testing Documentation
+- **[Testing Guide](docs/testing/testing.md)** - Testing strategy and guidelines
+- **[Frontend Testing](docs/testing/testing-frontend.md)** - Frontend testing guide
+- **[Coverage Report](docs/testing/coverage.md)** - Test coverage information
+
 ### Deployment Documentation
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Complete deployment automation guide
+- **[Production Checklist](docs/deployment/production-checklist.md)** - Pre-deployment checklist
 - **[Docker Deployment](docs/deployment/docker.md)** - Deploy with Docker
 - **[Kubernetes Deployment](docs/deployment/kubernetes.md)** - Deploy on Kubernetes
 - **[AWS Deployment](docs/deployment/aws.md)** - Deploy to AWS
@@ -809,7 +822,7 @@ taskkill /PID <PID> /F  # Windows
 
 ### Security Documentation
 - **[Security Guide](SECURITY.md)** - Security features and best practices
-- **[Monitoring Guide](MONITORING.md)** - Monitoring and observability setup
+- **[Monitoring Guide](docs/monitoring.md)** - Monitoring and observability setup
 
 ### External Links
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
