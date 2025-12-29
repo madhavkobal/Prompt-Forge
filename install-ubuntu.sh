@@ -38,7 +38,7 @@
 #
 # Author: PromptForge Team
 # License: MIT
-# Version: 1.0.3
+# Version: 1.0.4
 #
 ################################################################################
 
@@ -324,37 +324,69 @@ if [ "$SKIP_DB_SETUP" = false ]; then
     systemctl start postgresql
     systemctl enable postgresql
 
+    # Check if database and user already exist
+    USER_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='promptforge'" 2>/dev/null || echo "0")
+    DB_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='promptforge'" 2>/dev/null || echo "0")
+
     # Generate a secure random password for the database user
-    # In production, you should use a strong password
     DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 
-    print_info "Creating PostgreSQL user and database..."
+    if [ "$USER_EXISTS" = "1" ] || [ "$DB_EXISTS" = "1" ]; then
+        print_warning "Database or user already exists - updating password..."
 
-    # Run psql commands as the postgres user
-    # The postgres user has superuser privileges by default
-    sudo -u postgres psql <<EOF
--- Create the database user
--- This user will own the PromptForge database
-CREATE USER promptforge WITH PASSWORD '$DB_PASSWORD';
+        # Update existing user's password and ensure database exists
+        sudo -u postgres psql <<EOF
+-- Update user password if exists, create if not
+DO \$\$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='promptforge') THEN
+        ALTER USER promptforge WITH PASSWORD '$DB_PASSWORD';
+    ELSE
+        CREATE USER promptforge WITH PASSWORD '$DB_PASSWORD';
+    END IF;
+END
+\$\$;
 
--- Create the database
--- Set the owner to our promptforge user
-CREATE DATABASE promptforge OWNER promptforge;
+-- Create database if it doesn't exist
+SELECT 'CREATE DATABASE promptforge OWNER promptforge'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'promptforge')\gexec
 
--- Grant all privileges to the user
+-- Grant all privileges
 GRANT ALL PRIVILEGES ON DATABASE promptforge TO promptforge;
 
--- Connect to the database and set up schema permissions
+-- Connect to database and set permissions
 \c promptforge
 
 -- Grant schema permissions
 GRANT ALL ON SCHEMA public TO promptforge;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO promptforge;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO promptforge;
-
--- Exit psql
 \q
 EOF
+    else
+        print_info "Creating PostgreSQL user and database..."
+
+        # Run psql commands as the postgres user
+        sudo -u postgres psql <<EOF
+-- Create the database user
+CREATE USER promptforge WITH PASSWORD '$DB_PASSWORD';
+
+-- Create the database
+CREATE DATABASE promptforge OWNER promptforge;
+
+-- Grant all privileges
+GRANT ALL PRIVILEGES ON DATABASE promptforge TO promptforge;
+
+-- Connect to database and set permissions
+\c promptforge
+
+-- Grant schema permissions
+GRANT ALL ON SCHEMA public TO promptforge;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO promptforge;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO promptforge;
+\q
+EOF
+    fi
 
     # Save database credentials to a secure file
     # This will be used to generate the .env file
