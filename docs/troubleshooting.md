@@ -291,6 +291,34 @@ except Exception as e:
 
 ## Docker Issues
 
+### Docker Compose ContainerConfig Error
+
+**Problem:** docker-compose fails with `KeyError: 'ContainerConfig'`
+
+**Symptoms:**
+```
+KeyError: 'ContainerConfig'
+ERROR: for postgres  'ContainerConfig'
+```
+
+**Root Cause:** Compatibility issue between docker-compose v1.29.2 and newer Docker image formats.
+
+**Quick Fix:**
+```bash
+# Try Docker Compose v2 (recommended)
+sudo docker compose down -v
+sudo docker compose up --build
+
+# Or clean up and retry with v1
+sudo docker-compose down -v
+sudo docker system prune -f
+sudo docker-compose up --build
+```
+
+**Full solution:** See [Docker Compose ContainerConfig Error Guide](./troubleshooting/docker-compose-containerconfig-error.md)
+
+---
+
 ### Container Won't Start
 
 **Problem:** Docker container exits immediately
