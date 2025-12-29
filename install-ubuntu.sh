@@ -26,7 +26,7 @@
 #
 # What this script does:
 #   1. Verifies system compatibility
-#   2. Installs system dependencies (PostgreSQL 14-16, Python 3.11, Node.js 20)
+#   2. Installs system dependencies (PostgreSQL 14-16, Python 3.10-3.12, Node.js 20)
 #   3. Creates PostgreSQL database and user
 #   4. Sets up Python virtual environment
 #   5. Installs backend Python dependencies
@@ -38,7 +38,7 @@
 #
 # Author: PromptForge Team
 # License: MIT
-# Version: 1.0.1
+# Version: 1.0.2
 #
 ################################################################################
 
@@ -221,17 +221,44 @@ if [ "$SKIP_SYSTEM_DEPS" = false ]; then
 
     apt-get install -y -qq postgresql-$PG_VERSION postgresql-contrib-$PG_VERSION postgresql-client-$PG_VERSION
 
-    # Install Python 3.11
-    # PromptForge requires Python 3.11+ for modern features
-    print_info "Installing Python 3.11..."
+    # Install Python 3 (use system default version)
+    # PromptForge requires Python 3.10+ for modern features
+    # Ubuntu 24.04 → Python 3.12, Ubuntu 22.04 → Python 3.10
+    print_info "Installing Python 3..."
+
+    # Install default Python 3 and development tools
     apt-get install -y -qq \
-        python3.11 \
-        python3.11-venv \
-        python3.11-dev \
+        python3 \
+        python3-venv \
+        python3-dev \
         python3-pip
 
-    # Set Python 3.11 as the default python3
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+    # Detect installed Python version
+    PYTHON_VERSION=$(python3 --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
+    PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+    PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+
+    print_info "Detected Python $PYTHON_VERSION"
+
+    # Verify Python version is 3.10 or higher
+    if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]; then
+        print_warning "Python 3.10+ recommended, but found $PYTHON_VERSION"
+        print_info "Attempting to install Python 3.11 from deadsnakes PPA..."
+
+        # Add deadsnakes PPA for newer Python versions
+        add-apt-repository -y ppa:deadsnakes/ppa
+        apt-get update -qq
+
+        apt-get install -y -qq \
+            python3.11 \
+            python3.11-venv \
+            python3.11-dev
+
+        # Set Python 3.11 as the default
+        update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+
+        print_success "Installed Python 3.11 from deadsnakes PPA"
+    fi
 
     # Install Node.js 20.x
     # Required for the React frontend

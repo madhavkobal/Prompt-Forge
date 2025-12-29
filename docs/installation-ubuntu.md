@@ -146,18 +146,20 @@ The installation script performs these steps automatically:
 
 Installs:
 - PostgreSQL (auto-detects latest available: 14-16)
-- Python 3.11 (backend runtime)
+- Python 3 (auto-detects system default: 3.10-3.12)
 - Node.js 20 (frontend build tools)
 - Build essentials (compilers for native modules)
 - nginx (optional, for production)
 
-**Why:** PromptForge requires these specific versions for compatibility. PostgreSQL version is automatically detected based on your Ubuntu version (16 for Ubuntu 24.04, 14 for Ubuntu 22.04).
+**Why:** PromptForge requires these specific versions for compatibility. Versions are automatically detected based on your Ubuntu version:
+- **Ubuntu 24.04:** PostgreSQL 16, Python 3.12
+- **Ubuntu 22.04:** PostgreSQL 14, Python 3.10
 
 ### 3. **Version Verification** 🔍
 
 Checks installed versions:
 - PostgreSQL 14.x - 16.x (depends on Ubuntu version)
-- Python 3.11.x
+- Python 3.10.x - 3.12.x (depends on Ubuntu version)
 - Node.js 20.x
 - npm 10.x
 
@@ -415,10 +417,12 @@ sudo apt update
 sudo apt install -y postgresql postgresql-contrib
 ```
 
-### 2. Install Python 3.11
+### 2. Install Python 3
 
 ```bash
-sudo apt install -y python3.11 python3.11-venv python3.11-dev python3-pip
+# Install Python 3 (installs the default version for your Ubuntu release)
+# Ubuntu 24.04 → Python 3.12, Ubuntu 22.04 → Python 3.10
+sudo apt install -y python3 python3-venv python3-dev python3-pip
 ```
 
 ### 3. Install Node.js 20

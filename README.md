@@ -97,9 +97,9 @@ PromptForge helps you analyze, enhance, and optimize your AI prompts using Googl
 Before you begin, ensure you have the following installed:
 
 ### Required
-- **Python 3.9+** - [Download Python](https://www.python.org/downloads/)
+- **Python 3.10+** - [Download Python](https://www.python.org/downloads/)
 - **Node.js 20+** - [Download Node.js](https://nodejs.org/)
-- **PostgreSQL 15+** - [Download PostgreSQL](https://www.postgresql.org/download/)
+- **PostgreSQL 14+** - [Download PostgreSQL](https://www.postgresql.org/download/)
 - **Git** - [Download Git](https://git-scm.com/downloads)
 
 ### Optional (Recommended)
@@ -133,7 +133,7 @@ sudo ./install-ubuntu.sh --seed-demo
 ```
 
 The script automatically:
-- ✅ Installs all dependencies (PostgreSQL 14-16 auto-detected, Python 3.11, Node.js 20)
+- ✅ Installs all dependencies (PostgreSQL 14-16, Python 3.10-3.12 auto-detected, Node.js 20)
 - ✅ Creates and configures the database
 - ✅ Sets up Python virtual environment
 - ✅ Installs all packages (backend + frontend)
