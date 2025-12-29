@@ -52,13 +52,7 @@ def setup_logging() -> logging.Logger:
     if settings.LOG_FORMAT.lower() == 'json':
         # JSON formatter for production (easier for log aggregation)
         formatter = CustomJsonFormatter(
-            '%(timestamp)s %(level)s %(name)s %(message)s',
-            rename_fields={
-                'levelname': 'level',
-                'name': 'logger',
-                'pathname': 'file',
-                'lineno': 'line'
-            }
+            '%(timestamp)s %(levelname)s %(name)s %(message)s'
         )
     else:
         # Text formatter for development

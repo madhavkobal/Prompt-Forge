@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_USER: promptforge
       POSTGRES_PASSWORD: promptforge_dev_password
-      POSTGRES_DB: promptforge_db
+      POSTGRES_DB: promptforge
     ports:
       - "5432:5432"
     volumes:
@@ -29,9 +29,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://promptforge:promptforge_dev_password@postgres:5432/promptforge_db
+      DATABASE_URL: postgresql://promptforge:promptforge_dev_password@postgres:5432/promptforge
       SECRET_KEY: your-secret-key-change-in-production
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-your-gemini-api-key-here}
     depends_on:
       postgres:
         condition: service_healthy
