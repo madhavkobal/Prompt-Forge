@@ -38,7 +38,7 @@
 #
 # Author: PromptForge Team
 # License: MIT
-# Version: 1.0.4
+# Version: 1.0.5
 #
 ################################################################################
 
@@ -587,10 +587,16 @@ if [ "$SEED_DEMO" = true ]; then
     source venv/bin/activate
 
     print_info "Running seed script..."
-    python scripts/seed_data.py
-
-    print_success "Demo data seeded successfully"
-    print_info "Demo account - Username: demo, Password: DemoPassword123!"
+    if python scripts/seed_data.py 2>&1; then
+        print_success "Demo data seeded successfully"
+        print_info "📧 Demo account email: demo@promptforge.io"
+        print_info "👤 Demo account username: demo"
+        print_info "🔑 Demo account password: DemoPassword123!"
+    else
+        print_error "Failed to seed demo data"
+        print_warning "You can manually create a demo user after installation"
+        print_info "Or run: cd backend && source venv/bin/activate && python scripts/seed_data.py"
+    fi
 
     cd ..
 else
