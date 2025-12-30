@@ -133,10 +133,15 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Middleware to add security headers to all responses
+    Includes strict CSP with nonce support (no unsafe-inline/unsafe-eval)
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Add security headers to response"""
+        # Generate nonce for this request (for inline scripts/styles)
+        nonce = secrets.token_urlsafe(16)
+        request.state.csp_nonce = nonce  # Store in request state for use in templates
+
         response = await call_next(request)
 
         if settings.ENABLE_SECURITY_HEADERS:
@@ -145,29 +150,59 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["X-Frame-Options"] = "DENY"
             response.headers["X-XSS-Protection"] = "1; mode=block"
 
-            # Content Security Policy
-            csp_policy = (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                "style-src 'self' 'unsafe-inline'; "
-                "img-src 'self' data: https:; "
-                "font-src 'self' data:; "
-                "connect-src 'self' https://generativelanguage.googleapis.com; "
-                "frame-ancestors 'none'; "
-                "base-uri 'self'; "
-                "form-action 'self'"
-            )
+            # Strict Content Security Policy (no unsafe-inline/unsafe-eval)
+            # Development: More permissive for Vite/React hot reload
+            # Production: Strict policy with nonces
+            if settings.ENVIRONMENT == "production":
+                csp_policy = (
+                    "default-src 'self'; "
+                    f"script-src 'self' 'nonce-{nonce}'; "  # Nonce-based inline scripts
+                    f"style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com; "  # Nonce-based inline styles
+                    "img-src 'self' data: https:; "
+                    "font-src 'self' data: https://fonts.gstatic.com; "
+                    "connect-src 'self' https://generativelanguage.googleapis.com; "
+                    "frame-ancestors 'none'; "
+                    "base-uri 'self'; "
+                    "form-action 'self'; "
+                    "upgrade-insecure-requests"  # Upgrade HTTP to HTTPS
+                )
+            else:
+                # Development: Allow Vite hot reload and dev tools
+                csp_policy = (
+                    "default-src 'self'; "
+                    f"script-src 'self' 'nonce-{nonce}' 'unsafe-eval' ws: wss:; "  # unsafe-eval needed for Vite HMR
+                    f"style-src 'self' 'nonce-{nonce}' 'unsafe-inline' https://fonts.googleapis.com; "  # unsafe-inline for dev
+                    "img-src 'self' data: https: blob:; "
+                    "font-src 'self' data: https://fonts.gstatic.com; "
+                    "connect-src 'self' ws: wss: https://generativelanguage.googleapis.com; "  # ws for Vite HMR
+                    "frame-ancestors 'none'; "
+                    "base-uri 'self'; "
+                    "form-action 'self'"
+                )
+
             response.headers["Content-Security-Policy"] = csp_policy
 
-            # HSTS (HTTP Strict Transport Security)
+            # Report CSP violations (optional, for monitoring)
+            if settings.ENVIRONMENT == "production" and hasattr(settings, 'CSP_REPORT_URI'):
+                response.headers["Content-Security-Policy-Report-Only"] = (
+                    csp_policy + f"; report-uri {settings.CSP_REPORT_URI}"
+                )
+
+            # HSTS (HTTP Strict Transport Security) - Production only
             if settings.ENVIRONMENT == "production":
-                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+                # max-age=31536000 (1 year), include subdomains, preload
+                response.headers["Strict-Transport-Security"] = (
+                    "max-age=31536000; includeSubDomains; preload"
+                )
 
             # Referrer Policy
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
-            # Permissions Policy
-            response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+            # Permissions Policy (formerly Feature-Policy)
+            response.headers["Permissions-Policy"] = (
+                "geolocation=(), microphone=(), camera=(), payment=(), usb=(), "
+                "magnetometer=(), gyroscope=(), speaker=(self)"
+            )
 
         return response
 
