@@ -1,12 +1,99 @@
 """
 Structured logging configuration for PromptForge
 Supports both JSON and text formats for different environments
+Includes sensitive data redaction to prevent credential leaks
 """
 import logging
 import sys
+import re
 from typing import Any, Dict
 from pythonjsonlogger import jsonlogger
 from app.core.config import settings
+
+
+class SensitiveDataFilter(logging.Filter):
+    """
+    Logging filter that redacts sensitive information from log messages
+
+    Redacts:
+    - Passwords (password, passwd, pwd fields)
+    - Tokens (token, access_token, refresh_token, api_key, secret)
+    - Credit cards, SSNs, emails (pattern-based)
+    """
+
+    # Sensitive field names to redact
+    SENSITIVE_FIELDS = {
+        'password', 'passwd', 'pwd', 'secret', 'token', 'access_token',
+        'refresh_token', 'api_key', 'apikey', 'api_secret', 'private_key',
+        'authorization', 'auth', 'gemini_api_key', 'openai_api_key'
+    }
+
+    # Patterns for sensitive data
+    PATTERNS = {
+        'credit_card': re.compile(r'\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b'),
+        'ssn': re.compile(r'\b\d{3}-\d{2}-\d{4}\b'),
+        'email': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
+        'bearer_token': re.compile(r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', re.IGNORECASE),
+        'jwt': re.compile(r'eyJ[A-Za-z0-9\-._~+/]+=*'),
+    }
+
+    REDACTED = '[REDACTED]'
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """
+        Filter method called for each log record
+
+        Args:
+            record: Log record to filter
+
+        Returns:
+            True (always allow the record, just modify it)
+        """
+        # Redact message
+        if hasattr(record, 'msg') and isinstance(record.msg, str):
+            record.msg = self._redact_string(record.msg)
+
+        # Redact arguments
+        if hasattr(record, 'args') and record.args:
+            if isinstance(record.args, dict):
+                record.args = self._redact_dict(record.args)
+            elif isinstance(record.args, (list, tuple)):
+                record.args = tuple(self._redact_value(arg) for arg in record.args)
+
+        # Redact extra fields (for structured logging)
+        for attr in dir(record):
+            if not attr.startswith('_') and attr.lower() in self.SENSITIVE_FIELDS:
+                setattr(record, attr, self.REDACTED)
+
+        return True
+
+    def _redact_string(self, text: str) -> str:
+        """Redact sensitive patterns from a string"""
+        for pattern_name, pattern in self.PATTERNS.items():
+            text = pattern.sub(self.REDACTED, text)
+        return text
+
+    def _redact_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Redact sensitive fields from a dictionary"""
+        redacted = {}
+        for key, value in data.items():
+            if key.lower() in self.SENSITIVE_FIELDS:
+                redacted[key] = self.REDACTED
+            elif isinstance(value, dict):
+                redacted[key] = self._redact_dict(value)
+            elif isinstance(value, str):
+                redacted[key] = self._redact_string(value)
+            else:
+                redacted[key] = value
+        return redacted
+
+    def _redact_value(self, value: Any) -> Any:
+        """Redact a single value"""
+        if isinstance(value, str):
+            return self._redact_string(value)
+        elif isinstance(value, dict):
+            return self._redact_dict(value)
+        return value
 
 
 class CustomJsonFormatter(jsonlogger.JsonFormatter):
@@ -62,6 +149,11 @@ def setup_logging() -> logging.Logger:
         )
 
     console_handler.setFormatter(formatter)
+
+    # Add sensitive data redaction filter
+    sensitive_filter = SensitiveDataFilter()
+    console_handler.addFilter(sensitive_filter)
+
     root_logger.addHandler(console_handler)
 
     # Reduce noise from third-party libraries
