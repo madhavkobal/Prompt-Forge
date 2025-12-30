@@ -33,6 +33,7 @@ class Prompt(PromptBase):
     analysis_result: Optional[Dict[str, Any]] = None
     suggestions: Optional[List[str]] = None
     best_practices: Optional[Dict[str, Any]] = None
+    system_prompts_version: Optional[str] = None
     owner_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None

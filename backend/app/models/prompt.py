@@ -27,6 +27,7 @@ class Prompt(Base):
     target_llm = Column(String)  # ChatGPT, Claude, Gemini, Grok, DeepSeek
     category = Column(String)
     tags = Column(JSON)
+    system_prompts_version = Column(String)  # Track which meta-prompt version was used for analysis
 
     # Ownership
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)

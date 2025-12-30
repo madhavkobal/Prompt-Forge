@@ -16,6 +16,7 @@ from app.schemas.prompt import (
     PromptVersion,
 )
 from app.services.gemini_service import GeminiService
+from app.config.system_prompts import PROMPTS_VERSION
 
 router = APIRouter()
 gemini_service = GeminiService()
@@ -212,13 +213,14 @@ def analyze_prompt(
     try:
         analysis = gemini_service.analyze_prompt(prompt.content, prompt.target_llm)
 
-        # Update prompt with analysis results
+        # Update prompt with analysis results and track which version of meta-prompts was used
         prompt.quality_score = analysis.quality_score
         prompt.clarity_score = analysis.clarity_score
         prompt.specificity_score = analysis.specificity_score
         prompt.structure_score = analysis.structure_score
         prompt.suggestions = analysis.suggestions
         prompt.best_practices = analysis.best_practices
+        prompt.system_prompts_version = PROMPTS_VERSION  # Track meta-prompt version for A/B testing
 
         db.commit()
 

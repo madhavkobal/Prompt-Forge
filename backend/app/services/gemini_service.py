@@ -1,8 +1,9 @@
 import google.generativeai as genai
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import json
 import re
 import time
+import hashlib
 from app.core.config import settings
 from app.core.exceptions import AnalysisUnavailableException, EnhancementUnavailableException
 from app.config.system_prompts import (
@@ -20,7 +21,7 @@ genai.configure(api_key=settings.GEMINI_API_KEY)
 
 
 class GeminiService:
-    """Service for Google Gemini API integration with retry logic and multiple model support"""
+    """Service for Google Gemini API integration with retry logic, caching, and multiple model support"""
 
     # Supported Gemini models
     SUPPORTED_MODELS = {
@@ -29,9 +30,12 @@ class GeminiService:
         'gemini-1.5-flash': 'gemini-1.5-flash-latest',
     }
 
+    # Cache TTL in seconds (1 hour)
+    CACHE_TTL = 3600
+
     def __init__(self, model_name: str = 'gemini-pro', max_retries: int = 3):
         """
-        Initialize Gemini service
+        Initialize Gemini service with caching
 
         Args:
             model_name: Name of the Gemini model to use
@@ -40,6 +44,70 @@ class GeminiService:
         self.model_name = self.SUPPORTED_MODELS.get(model_name, 'gemini-pro')
         self.model = genai.GenerativeModel(self.model_name)
         self.max_retries = max_retries
+
+        # In-memory cache: {cache_key: (result, expiry_timestamp)}
+        self._cache: Dict[str, Tuple[Any, float]] = {}
+        self._last_cleanup = time.time()
+
+    def _get_cache_key(self, content: str, target_llm: Optional[str], operation: str) -> str:
+        """
+        Generate cache key from content and parameters
+
+        Args:
+            content: The prompt content
+            target_llm: Target LLM platform
+            operation: Type of operation (analyze, enhance, etc.)
+
+        Returns:
+            SHA256 hash as cache key
+        """
+        cache_str = f"{operation}:{content}:{target_llm or 'general'}"
+        return hashlib.sha256(cache_str.encode()).hexdigest()
+
+    def _get_from_cache(self, cache_key: str) -> Optional[Any]:
+        """
+        Retrieve item from cache if not expired
+
+        Args:
+            cache_key: The cache key to look up
+
+        Returns:
+            Cached result or None if not found/expired
+        """
+        if cache_key in self._cache:
+            result, expiry = self._cache[cache_key]
+            if time.time() < expiry:
+                return result
+            else:
+                # Expired - remove it
+                del self._cache[cache_key]
+        return None
+
+    def _save_to_cache(self, cache_key: str, result: Any) -> None:
+        """
+        Save result to cache with TTL
+
+        Args:
+            cache_key: The cache key
+            result: The result to cache
+        """
+        expiry = time.time() + self.CACHE_TTL
+        self._cache[cache_key] = (result, expiry)
+
+        # Periodic cleanup of expired entries (every 10 minutes)
+        if time.time() - self._last_cleanup > 600:
+            self._cleanup_expired_cache()
+
+    def _cleanup_expired_cache(self) -> None:
+        """Remove expired entries from cache to prevent memory bloat"""
+        current_time = time.time()
+        expired_keys = [
+            key for key, (_, expiry) in self._cache.items()
+            if current_time >= expiry
+        ]
+        for key in expired_keys:
+            del self._cache[key]
+        self._last_cleanup = current_time
 
     def _make_request_with_retry(self, prompt: str) -> str:
         """
@@ -77,7 +145,7 @@ class GeminiService:
 
     def analyze_prompt(self, content: str, target_llm: Optional[str] = None) -> PromptAnalysis:
         """
-        Analyze prompt quality with detailed evaluation
+        Analyze prompt quality with detailed evaluation (with caching)
 
         Evaluates:
         - Clarity score (0-100)
@@ -96,12 +164,23 @@ class GeminiService:
         Raises:
             AnalysisUnavailableException: If analysis service fails
         """
+        # Check cache first
+        cache_key = self._get_cache_key(content, target_llm, "analyze")
+        cached_result = self._get_from_cache(cache_key)
+        if cached_result is not None:
+            return cached_result
+
         analysis_prompt = get_analysis_prompt(content, target_llm)
 
         try:
             response_text = self._make_request_with_retry(analysis_prompt)
             result = self._parse_analysis_response(response_text)
-            return PromptAnalysis(**result)
+            analysis = PromptAnalysis(**result)
+
+            # Save to cache
+            self._save_to_cache(cache_key, analysis)
+
+            return analysis
         except Exception as e:
             error_msg = str(e)
             print(f"Error in analyze_prompt: {error_msg}")
@@ -109,7 +188,7 @@ class GeminiService:
 
     def enhance_prompt(self, content: str, target_llm: Optional[str] = None) -> PromptEnhancement:
         """
-        Enhance the prompt with best practices - generates multiple improved versions
+        Enhance the prompt with best practices - generates multiple improved versions (with caching)
 
         Args:
             content: The original prompt content
@@ -121,12 +200,23 @@ class GeminiService:
         Raises:
             EnhancementUnavailableException: If enhancement service fails
         """
+        # Check cache first
+        cache_key = self._get_cache_key(content, target_llm, "enhance")
+        cached_result = self._get_from_cache(cache_key)
+        if cached_result is not None:
+            return cached_result
+
         enhancement_prompt = get_enhancement_prompt(content, target_llm)
 
         try:
             response_text = self._make_request_with_retry(enhancement_prompt)
             result = self._parse_enhancement_response(response_text, content)
-            return PromptEnhancement(**result)
+            enhancement = PromptEnhancement(**result)
+
+            # Save to cache
+            self._save_to_cache(cache_key, enhancement)
+
+            return enhancement
         except Exception as e:
             error_msg = str(e)
             print(f"Error in enhance_prompt: {error_msg}")
