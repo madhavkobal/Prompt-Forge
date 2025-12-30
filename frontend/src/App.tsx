@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
 import { useEffect, lazy, Suspense } from 'react';
 import { authService } from '@/services/authService';
+import { SessionMonitor } from '@/components/SessionMonitor';
 
 // Lazy load pages for code splitting
 const Login = lazy(() => import('@/pages/Login'));
@@ -51,6 +52,7 @@ function App() {
   return (
     <>
       <BrowserRouter>
+        <SessionMonitor />
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/login" element={<Login />} />

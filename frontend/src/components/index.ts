@@ -6,6 +6,9 @@ export { default as Layout } from './Layout';
 export { default as PromptEditor } from './PromptEditor';
 export { default as ScoreCard } from './ScoreCard';
 
+// Auth components
+export { SessionMonitor } from './SessionMonitor';
+
 // Onboarding components
 export { default as WelcomeTour } from './WelcomeTour';
 export { default as Tutorial } from './Tutorial';
