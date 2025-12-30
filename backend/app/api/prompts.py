@@ -130,10 +130,19 @@ def update_prompt(
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
 
-    # Update fields
-    update_data = prompt_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(prompt, field, value)
+    # Update fields using explicit field mapping for security
+    # This prevents accidental overwrites of internal fields (id, owner_id, etc.)
+    # if the schema ever evolves or allows extra fields
+    if prompt_data.title is not None:
+        prompt.title = prompt_data.title
+    if prompt_data.content is not None:
+        prompt.content = prompt_data.content
+    if prompt_data.target_llm is not None:
+        prompt.target_llm = prompt_data.target_llm
+    if prompt_data.category is not None:
+        prompt.category = prompt_data.category
+    if prompt_data.tags is not None:
+        prompt.tags = prompt_data.tags
 
     # Create new version if content changed
     if prompt_data.content:
