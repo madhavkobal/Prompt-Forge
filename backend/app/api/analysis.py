@@ -1,12 +1,13 @@
 """
 Advanced analysis endpoints for prompt evaluation
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
 from app.core.database import get_db
 from app.core.exceptions import AnalysisUnavailableException, EnhancementUnavailableException
+from app.core.rate_limiter import ai_endpoint_rate_limit
 from app.api.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.prompt import Prompt as PromptModel
@@ -18,9 +19,11 @@ router = APIRouter()
 @router.post("/prompt/{prompt_id}/versions")
 def generate_enhanced_versions(
     prompt_id: int,
+    request: Request,
     num_versions: int = 3,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    _rate_limit: None = Depends(ai_endpoint_rate_limit),
 ) -> Dict[str, Any]:
     """
     Generate multiple enhanced versions of a prompt
@@ -29,6 +32,8 @@ def generate_enhanced_versions(
     - Version 1: Clarity and structure
     - Version 2: Specificity and detail
     - Version 3: Context and examples
+
+    Rate Limit: 10 requests/minute (AI endpoint)
     """
     # Fetch prompt
     prompt = (
@@ -72,8 +77,10 @@ def generate_enhanced_versions(
 @router.post("/prompt/{prompt_id}/ambiguities")
 def detect_ambiguities(
     prompt_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    _rate_limit: None = Depends(ai_endpoint_rate_limit),
 ) -> Dict[str, Any]:
     """
     Detect ambiguous or unclear parts in a prompt
@@ -82,6 +89,8 @@ def detect_ambiguities(
     - The ambiguous phrase
     - Why it's ambiguous
     - How to clarify it
+
+    Rate Limit: 10 requests/minute (AI endpoint)
     """
     # Fetch prompt
     prompt = (

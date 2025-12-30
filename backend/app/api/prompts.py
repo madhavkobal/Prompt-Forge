@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
 from app.core.exceptions import AnalysisUnavailableException, EnhancementUnavailableException
+from app.core.rate_limiter import ai_endpoint_rate_limit
 from app.api.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.prompt import Prompt as PromptModel, PromptVersion as PromptVersionModel
@@ -194,10 +195,17 @@ def delete_prompt(
 @router.post("/{prompt_id}/analyze", response_model=PromptAnalysis)
 def analyze_prompt(
     prompt_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    _rate_limit: None = Depends(ai_endpoint_rate_limit),
 ):
-    """Analyze prompt quality"""
+    """
+    Analyze prompt quality
+
+    Rate Limit: 10 requests/minute (stricter than global 60/min)
+    Rationale: AI analysis is computationally expensive
+    """
     prompt = (
         db.query(PromptModel)
         .filter(
@@ -239,10 +247,17 @@ def analyze_prompt(
 @router.post("/{prompt_id}/enhance", response_model=PromptEnhancement)
 def enhance_prompt(
     prompt_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    _rate_limit: None = Depends(ai_endpoint_rate_limit),
 ):
-    """Enhance prompt with AI"""
+    """
+    Enhance prompt with AI
+
+    Rate Limit: 10 requests/minute (stricter than global 60/min)
+    Rationale: AI enhancement is computationally expensive
+    """
     prompt = (
         db.query(PromptModel)
         .filter(
