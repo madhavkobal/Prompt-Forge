@@ -150,3 +150,71 @@ def generate_secure_token(length: int = 32) -> str:
     """
     import secrets
     return secrets.token_urlsafe(length)
+
+
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create JWT refresh token (longer-lived than access tokens)
+
+    Refresh tokens are used to obtain new access tokens without re-authentication.
+    They should be stored securely (httpOnly cookie) and have longer expiration.
+
+    Args:
+        data: Data to encode in the token (typically user identifier)
+        expires_delta: Custom expiration time (default: REFRESH_TOKEN_EXPIRE_DAYS from settings)
+
+    Returns:
+        Encoded JWT refresh token
+    """
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        # Default: 7 days (configurable in settings)
+        expire = datetime.utcnow() + timedelta(days=getattr(settings, 'REFRESH_TOKEN_EXPIRE_DAYS', 7))
+
+    to_encode.update({
+        "exp": expire,
+        "type": "refresh"  # Mark as refresh token
+    })
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+
+def decode_refresh_token(token: str) -> Optional[dict]:
+    """
+    Decode and validate refresh token
+
+    Args:
+        token: JWT refresh token to decode
+
+    Returns:
+        Decoded payload if valid, None otherwise
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+        # Verify it's a refresh token
+        if payload.get("type") != "refresh":
+            return None
+
+        return payload
+    except JWTError:
+        return None
+
+
+def hash_token(token: str) -> str:
+    """
+    Hash a token for secure storage in database
+
+    Tokens should never be stored in plain text. This creates a SHA-256 hash
+    that can be safely stored and compared.
+
+    Args:
+        token: Token to hash
+
+    Returns:
+        Hexadecimal hash of the token
+    """
+    import hashlib
+    return hashlib.sha256(token.encode()).hexdigest()
