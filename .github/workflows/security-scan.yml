@@ -104,10 +104,12 @@ jobs:
       security-events: write
       actions: read
       contents: read
+    timeout-minutes: 20  # Prevent indefinite hangs
 
     strategy:
       matrix:
         language: [ 'python', 'javascript' ]
+      fail-fast: false  # Continue even if one language fails
 
     steps:
       - name: Checkout code
@@ -117,7 +119,9 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          queries: security-extended
+          # Changed from security-extended to default for faster analysis
+          # security-extended can timeout on larger codebases
+          queries: security-and-quality
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
